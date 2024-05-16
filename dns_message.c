@@ -124,9 +124,11 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     assert(rlen = 16);
     
     /* read byte string */
-    for (i=0;i<16;i+=2) {
+    printf("\n");
+    for (i=0;i<16;i+=1) {
         ip[i] = packet[start+i];
     }
+    printf("\n");
 
     /* convert byte string into ip address */
     inet_ntop(AF_INET6,ip,new_dns_message->response.r,INET6_ADDRSTRLEN);
@@ -134,7 +136,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 }
 
 void print_message(dns_message_t *dns_message) {
-    printf("---header---\n");
+    printf("\n---header---\n");
     printf("ID: %x",dns_message->header.id);
     printf(" ,QR: %d",dns_message->header.QR);
     printf(" ,NQ: %d",dns_message->nq);
@@ -148,6 +150,7 @@ void print_message(dns_message_t *dns_message) {
         printf("---response---\n");
         printf("IPv6: %s\n",dns_message->response.r);
     }
+    printf("\n");
 }
 
 void print_log(dns_message_t *dns_message) {
@@ -169,6 +172,5 @@ void print_log(dns_message_t *dns_message) {
     }
     //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache
     //<timestamp> replacing <domain_name> by <domain_name> – for each cache eviction
-
+    printf("\n");
 }
-

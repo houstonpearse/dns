@@ -26,8 +26,6 @@ int main(int argc, char* argv[]) {
     /* 1st byte 0x9F is left shifted to by 8 bits to become 0x9F00 */
     /* 2nd byte 0xA2 is concatenated (|)to the first byte to get 0x9FA2 with */
     packet_size = (size_buffer[0]<<8)|(size_buffer[1]);
-    printf("decimal size: %d\n",packet_size);
-    
 
     /* read rest of packet */
     packet = malloc(packet_size*sizeof(*packet));

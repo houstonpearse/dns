@@ -48,7 +48,7 @@ int main(int argc,char** argv) {
 
     
     while(true) {
-        printf("---------------------------------\n");
+        printf("\n\n-------------------------------------------------\n");
         printf("waiting for new connections...\n");
         /* accept a connection request on our listening socket */
         client_addr_size = sizeof client_addr;
@@ -62,12 +62,13 @@ int main(int argc,char** argv) {
             exit(EXIT_FAILURE);
         }
         
-        printf("accepted a new connection %d\n",newsockfd_inc);
+        printf("accepted a new connection. %d\n",newsockfd_inc);
+        printf("setup upstream connection...\n");
 
         sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
 
-        printf("setup upstream connection\n");
-
+        
+        printf("handling new connection...\n");
         handle_new_connection(newsockfd_inc,sockfd_out);
 
         close(sockfd_out);
@@ -92,25 +93,30 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     /* read from client. will store message len in inc_mes_len */
     cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
 
-    printf("writing to log...\n");
+    
     /* write to log */
+    printf("creating dns struct...\n");
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
+    printf("writing to log...\n");
     write_log_message(get_log_message(inc_message));
     print_message(inc_message);
 
     /* if we have received a non AAAA query */
     if(inc_message->question.is_AAAA == false) {
         
-        
+        printf("request was for IPv4, set rcode and parameters...\n");
         // set Rcode in query to 4
         set_parameters(&cbuffer[2],inc_mes_len-2);
         
+        printf("creating the altered dns struct...\n");
         out_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
         print_message(out_message);
 
+        printf("send altered packet back...\n");
         // write back to client
         write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
-        
+
+        printf("closing connection...\n");
         close(newsockfd_inc);
         free_dns_message(inc_message);
         free_dns_message(out_message);
@@ -136,7 +142,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     /* forward server response to client */
     write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
     
-    printf("closing connection\n");
+    printf("closing connection...\n");
     close(newsockfd_inc);
 
     free_dns_message(out_message);
@@ -178,7 +184,7 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
         }
     }
 
-
+    printf("got message...\n");
     *sizeptr = current_len;
     hex_dump(buffer,current_len);
     return buffer;

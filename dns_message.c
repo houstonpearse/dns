@@ -151,12 +151,11 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     rlen = (packet[start]<<8)|(packet[start+1]);
     start+=2;
 
-    
+    printf("rlen is %d\n",rlen);
     assert(packet_size>=start+rlen);
-    assert(rlen == 16);
     
     /* read byte string */
-    for (i=0;i<16;i+=1) {
+    for (i=0;i<rlen;i+=1) {
         ip[i] = packet[start+i];
     }
 
@@ -166,23 +165,28 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 }
 
 void print_message(dns_message_t *dns_message) {
-    printf("\n------------- header -------------\n");
+    
+    printf("\n");
+    printf("-------------------------------------------------\n");
+    printf("-------------------- header ---------------------\n");
     printf("ID: %x",dns_message->header.id);
     printf(" ,QR: %d",dns_message->header.QR);
     printf(" ,NQ: %d",dns_message->nq);
     printf(" ,NA: %d\n",dns_message->nr);
-
-    printf("--------------- question -----------\n");
+    
+    printf("------------------- question --------------------\n");
     printf("URL: %s",dns_message->question.domn);
     printf(" ,AAAA: %d\n",dns_message->question.is_AAAA);
 
     if (dns_message->nr>0) {
-        printf("--------------- response -----------\n");
-        printf("IPv6: %s\n",dns_message->response.ipadr);
-        printf("TTL: %d\n",dns_message->response.ttl);
+        printf("------------------- response --------------------\n");
+        printf("IPv6: %s",dns_message->response.ipadr);
+        printf(" ,TTL: %d\n",dns_message->response.ttl);
 
     }
-    printf("\n");
+
+    printf("-------------------------------------------------\n");
+    
 }
 
 

@@ -137,6 +137,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     new_dns_message->response.is_AAAA = (((packet[start]<<8)|(packet[start+1]))==28);
     start+=2;
 
+    
     /* skip class */
     start+=2;
 
@@ -148,6 +149,11 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
         (packet[start+3]<<0)
     );
     start+=4;
+
+    /* we dont want to read the responce unless it is IPv6 */
+    if(new_dns_message->response.is_AAAA!=1) {
+        return;
+    }
 
     /* get response length */
     rlen = (packet[start]<<8)|(packet[start+1]);
@@ -182,8 +188,11 @@ void print_message(dns_message_t *dns_message) {
 
     if (dns_message->nr>0) {
         printf("------------------- response --------------------\n");
-        printf("IPv6: %s",dns_message->response.ipadr);
+        printf("isAAA: %d",dns_message->response.is_AAAA);
         printf(" ,TTL: %d\n",dns_message->response.ttl);
+        if(dns_message->response.is_AAAA) {
+            printf("IPv6: %s",dns_message->response.ipadr);
+        }
 
     }
 
@@ -204,7 +213,8 @@ char *get_log_message(dns_message_t *dns_message) {
     strftime(timestamp, MAX_TIME_LEN, "%FT%T%z", timeptr);
     
     /* dont write to the log if its a reply with no answer */
-    if(dns_message->header.QR==1 && dns_message->nr == 0) {
+    if(dns_message->header.QR==1 && 
+        (dns_message->nr == 0 || dns_message->response.is_AAAA) ) {
         return NULL;
 
     } else if (dns_message->header.QR==1 && dns_message->nr!=0) {

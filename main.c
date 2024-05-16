@@ -38,8 +38,6 @@ int main(int argc,char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
-    /* sets up socket we will be forwarding our requests to */
-	sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
 
     /* sets up socket to receive incomming connections and listens */
     sockfd_inc = setup_listening_socket();
@@ -62,12 +60,16 @@ int main(int argc,char** argv) {
         
         printf("accepted a new connection %d\n",newsockfd_inc);
 
+        sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
+
         handle_new_connection(newsockfd_inc,sockfd_out);
+
+        close(sockfd_out);
         
     }
 
     close(sockfd_inc);
-    close(sockfd_out);
+    
     
     
 }
@@ -121,8 +123,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
 /* reads a response packet from a socket, stores size in pointer */
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     uint8_t *buffer;
-    int current_len,bytes_to_read,bytes_read;
-    uint16_t btr;
+    int current_len=0,bytes_to_read=0,bytes_read=0;
 
     printf("allocating memory header...\n");
     // allocate memory for two byte tcp size header
@@ -130,13 +131,12 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
 
     // read two byte size header
     printf("reading size header...\n");
-    read(sockfd,buffer,TCP_SIZE_HEADER);
-    current_len = TCP_SIZE_HEADER;
+    current_len += read(sockfd,buffer,TCP_SIZE_HEADER);
 
     // get number of bytes of the remaining message
-    bytes_to_read = btr = ntohs(*(uint16_t*)buffer);
+    bytes_to_read = buffer[0]<<8 | buffer[1];
     printf("size is %d, reallocate...\n",bytes_to_read);
-    buffer = realloc(buffer,bytes_to_read+TCP_SIZE_HEADER);
+    buffer = realloc(buffer,(bytes_to_read+TCP_SIZE_HEADER)*sizeof(uint8_t));
 
 
     // read rest of message
@@ -145,12 +145,15 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
         bytes_to_read-=bytes_read;
         current_len+=bytes_read;
         if (bytes_to_read == 0) {
-            *sizeptr = current_len;
-            hex_dump(buffer,current_len);
-            printf("total bytes read is %d\n",current_len);
-            return buffer;
+            break;
         }
     }
+
+
+    *sizeptr = current_len;
+    hex_dump(buffer,current_len);
+    return buffer;
+
 }
 
 /* writes a buffer to a socket. will keep trying to send untill entire buffer

@@ -75,96 +75,105 @@ int main(int argc,char** argv) {
 		close(sockfd_out);
 	}
 
-    /*************** accept incomming messages **************/
-
-    /* Create new socket to listen on */
-	sockfd_inc = socket(res_inc->ai_family, res_inc->ai_socktype, res_inc->ai_protocol);
-	if (sockfd_inc < 0) {
-		perror("socket_inc");
-		exit(EXIT_FAILURE);
-	}
-
-    /* so we can reuse port */
-	re = 1;
-	if (setsockopt(sockfd_inc, SOL_SOCKET, SO_REUSEADDR, &re, sizeof(int)) < 0) {
-		perror("setsockopt_inc");
-		exit(EXIT_FAILURE);
-	}
-
-    /* bind to socket */
-    if (bind(sockfd_inc, res_inc->ai_addr, res_inc->ai_addrlen) < 0) {
-		perror("bind");
-		exit(EXIT_FAILURE);
-	}
     
-    /* listen on socket */
-    if (listen(sockfd_inc, 5) < 0) {
-		perror("listen");
-		exit(EXIT_FAILURE);
-	}
 
-    /* accept a connection request */
-    client_addr_size = sizeof client_addr;
-	newsockfd_inc =
-		accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
-	if (newsockfd_inc < 0) {
-		perror("accept");
-		exit(EXIT_FAILURE);
-	}
     
-    /************ read message from a client ******************/
     
-    /* first two bytes is for packet size */
-    cbuffer = malloc(2*sizeof(uint8_t));
-    if (read(newsockfd_inc,cbuffer,2)!=2) {
-        printf("failed to read size from client query\n");
+
+    /************* connect to new client and process   *************/
+    while(true) {
+
+        /*************** setup socket for incomming messages **************/
+
+        /* Create new socket to listen on */
+        sockfd_inc = socket(res_inc->ai_family, res_inc->ai_socktype, res_inc->ai_protocol);
+        if (sockfd_inc < 0) {
+            perror("socket_inc");
+            exit(EXIT_FAILURE);
+        }
+
+        /* so we can reuse port */
+        re = 1;
+        if (setsockopt(sockfd_inc, SOL_SOCKET, SO_REUSEADDR, &re, sizeof(int)) < 0) {
+            perror("setsockopt_inc");
+            exit(EXIT_FAILURE);
+        }
+
+        /* bind to socket */
+        if (bind(sockfd_inc, res_inc->ai_addr, res_inc->ai_addrlen) < 0) {
+            perror("bind");
+            exit(EXIT_FAILURE);
+        }
+
+        /* listen on socket */
+        if (listen(sockfd_inc, 5) < 0) {
+            perror("listen");
+            exit(EXIT_FAILURE);
+        }
+
+        /* accept a connection request */
+        client_addr_size = sizeof client_addr;
+        newsockfd_inc =
+            accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
+        if (newsockfd_inc < 0) {
+            perror("accept");
+            exit(EXIT_FAILURE);
+        }
+        
+        /************ read message from a client ******************/
+        
+        /* first two bytes is for packet size */
+        cbuffer = malloc(2*sizeof(uint8_t));
+        if (read(newsockfd_inc,cbuffer,2)!=2) {
+            printf("failed to read size from client query\n");
+        }
+
+        /* read rest of message from client */
+        len = ((cbuffer[0]<<8)|cbuffer[1]);
+        cbuffer = realloc(cbuffer,len+2);
+        if(read(newsockfd_inc,&cbuffer[2],len)!=len) {
+            printf("whole message not read from client\n");
+        }
+
+        message = new_dns_message(&cbuffer[2],len);
+        write_to_log(message);
+
+        /*************** forward message to server ***************/
+
+        if (write(sockfd_out, cbuffer, len+2)!=len+2) {
+            printf("whole message not sent to up stream\n");
+        }
+
+        /***************** read response from server ************/
+
+        /* get size of responce from first two bytes */
+        upsbuffer = malloc(2*sizeof(uint8_t));
+        if(read(sockfd_out,upsbuffer,2)!=2) {
+            printf("failed to read size from upstream response\n");
+        }
+
+        len = ((upsbuffer[0]<<8)|upsbuffer[1]);
+        upsbuffer = realloc(upsbuffer,len+2);
+        if(read(sockfd_out,&upsbuffer[2],len)!=len) {
+            printf("whole message not received by server from upsteam\n");
+        }
+
+        //message = new_dns_message(&upsbuffer[2],len);
+        //print_message(message);
+        //print_log(message);
+
+        /************* forward response to client *************/
+
+        if(write(newsockfd_inc,upsbuffer,len+2)!=len+2) {
+            printf("whole message not received by client\n");
+        }
+
+
+        close(newsockfd_inc);
     }
-
-    /* read rest of message from client */
-    len = ((cbuffer[0]<<8)|cbuffer[1]);
-    cbuffer = realloc(cbuffer,len+2);
-    if(read(newsockfd_inc,&cbuffer[2],len)!=len) {
-        printf("whole message not read from client\n");
-    }
-
-    message = new_dns_message(&cbuffer[2],len);
-    write_to_log(message);
-
-    /*************** forward message to server ***************/
-
-	if (write(sockfd_out, cbuffer, len+2)!=len+2) {
-        printf("whole message not sent to up stream\n");
-    }
-
-    /***************** read response from server ************/
-
-    /* get size of responce from first two bytes */
-    upsbuffer = malloc(2*sizeof(uint8_t));
-    if(read(sockfd_out,upsbuffer,2)!=2) {
-        printf("failed to read size from upstream response\n");
-    }
-
-    len = ((upsbuffer[0]<<8)|upsbuffer[1]);
-    upsbuffer = realloc(upsbuffer,len+2);
-    if(read(sockfd_out,&upsbuffer[2],len)!=len) {
-        printf("whole message not received by server from upsteam\n");
-    }
-
-    //message = new_dns_message(&upsbuffer[2],len);
-    //print_message(message);
-    //print_log(message);
-
-    /************* forward response to client *************/
-
-    if(write(newsockfd_inc,upsbuffer,len+2)!=len+2) {
-        printf("whole message not received by client\n");
-    }
-
-
-
 
     close(sockfd_inc);
     close(sockfd_out);
-    close(newsockfd_inc);
+    
     
 }

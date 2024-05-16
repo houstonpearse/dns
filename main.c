@@ -69,7 +69,9 @@ int main(int argc,char** argv) {
             set_rcode(&cbuffer[2],inc_mes_len-2,4);
             // write back to client
             write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+            close(newsockfd_inc);
             continue;
+            
         }
 
 

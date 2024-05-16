@@ -136,6 +136,7 @@ void handle_new_connection(cache_t *cache,int newsockfd_inc,int sockfd_out) {
             cache_search_val->ttl);
         cachestring = usage_cache_message(cache_search_val);
         write_log_message(cachestring);
+        write_log_message(get_log_message(new_dns_message(&upsbuffer[2],out_mes_len-2)));
 
     } else {
 

@@ -75,9 +75,11 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     uint8_t *cbuffer,*upsbuffer;
     dns_message_t *inc_message;
 
+    printf("reading from client...\n");
     /* read from client. will store message len in inc_mes_len */
     cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
 
+    printf("writing to log...\n");
     /* write to log */
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
     write_to_log(inc_message,NOT_REPLY);
@@ -93,15 +95,16 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
         
     }
 
-
+    printf("forwarding to server...\n");
     /* forward message to server */
     write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
     
+    printf("reading from server...\n");
     /* get response from server */
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
     write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),REPLY);
 
-
+    printf("forwarding to client...\n");
     /* forward server response to client */
     write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
     
@@ -115,13 +118,16 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     uint8_t *buffer;
     int current_len,bytes_to_read,bytes_read;
 
+    printf("allocating memory header...\n");
     // allocate memory for two byte tcp size header
     buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
     // read two byte size header
-    read(sockfd,&buffer,TCP_SIZE_HEADER);
+    printf("reading size header...\n");
+    read(sockfd,buffer,TCP_SIZE_HEADER);
     current_len = TCP_SIZE_HEADER;
     // get number of bytes of the remaining message
     bytes_to_read = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
+    printf("size is %d, reallocate...\n",bytes_to_read);
     buffer = realloc(buffer,bytes_to_read+TCP_SIZE_HEADER);
 
 
@@ -141,15 +147,21 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
  *is received
 */
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
-    int bytes_sent=0,bytes_rem = buffer_size,bytes_written;
+    //int bytes_sent=0,bytes_rem = buffer_size,bytes_written;
+    
+    if(write(sockfd,buffer,buffer_size)<buffer_size) {
+        printf("only partially wrote to socket...\n");
+    }
+    /*
     while(true) {
-        bytes_written=write(sockfd,&buffer[0+bytes_sent],bytes_rem);
+        bytes_written=write(sockfd,&buffer[bytes_sent],bytes_rem);
         bytes_rem-=bytes_written;
         bytes_sent+=bytes_written;
         if(bytes_rem==0) {
             return;
         }
     }
+    */
 }
 
 /* sets up listening socket */

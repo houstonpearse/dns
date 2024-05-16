@@ -62,9 +62,8 @@ int main(int argc,char** argv) {
         write_to_log(inc_message,0);
 
         /* forward message to server */
-        if (write(sockfd_out, cbuffer, inc_mes_len)!=inc_mes_len) {
-            printf("whole message not sent to up stream\n");
-        }
+        write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
+        
 
         /* get response from server */
         upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
@@ -105,26 +104,50 @@ int main(int argc,char** argv) {
 /* reads a response packet from a socket, stores size in pointer */
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     uint8_t *buffer;
-    int packet_len,total_len;
+    int packet_len,total_len,current_len,bytes_to_read,bytes_read;
 
-
-    /* first two bytes is for packet size */
     buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
-    if (read(sockfd,buffer,TCP_SIZE_HEADER)!=TCP_SIZE_HEADER) {
-        printf("ERROR: failed to read TCP size header\n");
-    }
+    current_len = 0;
+    while (true) {
+        /* we have yet to read the two byte tcp size header */
+        if (current_len<TCP_SIZE_HEADER) {
+            current_len+=
+            read(sockfd,&buffer[0+current_len],TCP_SIZE_HEADER-current_len);
+            /* check if we can get the size from the first two bytes */
+            if (current_len==TCP_SIZE_HEADER) {
+                packet_len = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
+                total_len = packet_len + TCP_SIZE_HEADER;
+                buffer = realloc(buffer,total_len);
+                bytes_to_read = packet_len;
+            }
+        }
 
-    /* read rest of message from client */
-    packet_len = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
-    total_len = packet_len + TCP_SIZE_HEADER;
-    buffer = realloc(buffer,total_len);
-    if(read(sockfd,&buffer[2],packet_len)!=packet_len) {
-        printf("ERROR: failed to read whole tcp message\n");
+        /* if we have read the header, start reading rest of message */
+        if(current_len>=TCP_SIZE_HEADER) {
+            bytes_read=read(sockfd,&buffer[0+current_len],bytes_to_read);
+            bytes_to_read-=bytes_read;
+            current_len+=bytes_read;
+            if (bytes_to_read = 0) {
+                *sizeptr = total_len;
+                return buffer;
+            }
+        }
     }
+}
 
-    *sizeptr = total_len;
-    return buffer;
-    
+/* writes a buffer to a socket. will keep trying to send untill entire buffer
+ *is received
+*/
+void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
+    int bytes_sent=0,bytes_rem = buffer_size,bytes_written;
+    while(true) {
+        bytes_written=write(sockfd,buffer[0+bytes_sent],bytes_rem);
+        bytes_rem-=bytes_written;
+        bytes_sent+=bytes_written;
+        if(bytes_rem==0) {
+            return;
+        }
+    }
 }
 
 /* sets up listening socket */

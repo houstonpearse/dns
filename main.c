@@ -28,7 +28,7 @@ int main(int argc,char** argv) {
 	uint8_t *cbuffer,*upsbuffer;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size = sizeof client_addr;
-    dns_message_t *inc_message,*out_message;
+    dns_message_t *inc_message;
 
 
     /* the ip and port of the server the messages will be forwarded to */
@@ -63,35 +63,28 @@ int main(int argc,char** argv) {
         inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
         write_to_log(inc_message,0);
 
+        /* if we have received a non AAAA query */
+        if(inc_message->question.is_AAAA == false) {
+            // set Rcode in query to 4
+            set_rcode(&cbuffer[2],inc_mes_len-2,4);
+            // write back to client
+            write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+            continue;
+        }
+
+
         /* forward message to server */
         write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
         
-
         /* get response from server */
         upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
-        out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
+        write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),1);
 
 
-        /* forward response to client */
-
-        /* check if request was ipv6 */
-        if(inc_message->question.is_AAAA == false) {
-            // change inc_message to have Rcode 4
-            set_rcode(&cbuffer[2],inc_mes_len-2,4);
-            // send original message back with Rcode 4
-            if(write(newsockfd_inc,cbuffer,inc_mes_len)!=inc_mes_len) {
-                printf("whole message not received by client\n");
-            }
-        } else {
-            // send message received from upstream
-            if(write(newsockfd_inc,upsbuffer,out_mes_len)!=out_mes_len) {
-                printf("whole message not received by client\n");
-            }
-            /* write to log */
-            write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),1);
-        }
-
+        /* forward server response to client */
+        write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
         
+
         close(newsockfd_inc);
     }
 

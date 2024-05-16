@@ -10,11 +10,11 @@
 #include <string.h>
 #include <unistd.h>
 
-#define LOCAL_PORT_NUM 8053
+#define LOCAL_PORT_NUM "8053"
 
 int main(int argc,char** argv) {
-    int sockfd, newsockfd, n, re, i, s;
-	char buffer[256];
+    int sockfd_out,sockfd_inc,newsockfd, re, s,len;
+	uint8_t *buffer;
 	struct addrinfo hints_inc, hints_out, *res_inc, *res_out,*rp;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
@@ -63,37 +63,79 @@ int main(int argc,char** argv) {
     
     /* attempt to connect to the first valid result */
     for (rp = res_out; rp != NULL; rp = rp->ai_next) {
-		sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-		if (sockfd == -1)
+		sockfd_out = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (sockfd_out == -1)
 			continue;
 
-		if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) != -1)
+		if (connect(sockfd_out, rp->ai_addr, rp->ai_addrlen) != -1)
 			break; // success
 
-		close(sockfd);
+		close(sockfd_out);
 	}
 
     /*************** accept incomming messages **************/
 
     /* Create new socket to listen on */
-	sockfd = socket(res_inc->ai_family, res_inc->ai_socktype, res_inc->ai_protocol);
-	if (sockfd < 0) {
-		perror("socket");
+	sockfd_inc = socket(res_inc->ai_family, res_inc->ai_socktype, res_inc->ai_protocol);
+	if (sockfd_inc < 0) {
+		perror("socket_inc");
 		exit(EXIT_FAILURE);
 	}
 
     /* so we can reuse port */
 	re = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &re, sizeof(int)) < 0) {
-		perror("setsockopt");
+	if (setsockopt(sockfd_inc, SOL_SOCKET, SO_REUSEADDR, &re, sizeof(int)) < 0) {
+		perror("setsockopt_inc");
 		exit(EXIT_FAILURE);
 	}
 
     /* bind to socket */
-    if (bind(sockfd, res_inc->ai_addr, res_inc->ai_addrlen) < 0) {
+    if (bind(sockfd_inc, res_inc->ai_addr, res_inc->ai_addrlen) < 0) {
 		perror("bind");
 		exit(EXIT_FAILURE);
 	}
+    
+    /* listen on socket */
+    if (listen(sockfd_inc, 5) < 0) {
+		perror("listen");
+		exit(EXIT_FAILURE);
+	}
+
+    /* accept a connection request */
+    client_addr_size = sizeof client_addr;
+	newsockfd =
+		accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
+	if (newsockfd < 0) {
+		perror("accept");
+		exit(EXIT_FAILURE);
+	}
+    
+    /* read message */
+    
+    /* first two bytes is for packet size */
+    buffer = malloc(2*sizeof(uint8_t));
+    if (read(newsockfd,buffer,2)!=2) {
+        printf("failed to read size\n");
+    }
+
+    len = ((buffer[0]<<8)|buffer[1]);
+    buffer = realloc(buffer,len+2);
+    if(read(newsockfd,&buffer[2],len)<len) {
+        printf("whole message not received\n");
+    }
+
+    /* forward message to server*/
+	if (write(sockfd_out, buffer, len+2)<len+2) {
+        printf("whole message not sent\n");
+    }
+
+
+    close(sockfd_inc);
+    close(sockfd_out);
+    close(newsockfd);
+
+
+
 
 
 

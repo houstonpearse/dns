@@ -1,3 +1,4 @@
+
 #include "dns_message.h"
 
 #include <stdint.h>
@@ -27,6 +28,7 @@ dns_message_t *new_dns_message(uint8_t *packet,int packet_size) {
     return message;
 
 }
+
 /* allocate memory for new dns_message */
 dns_message_t *make_new_dns_message() {
     dns_message_t *new_dns_message = malloc(sizeof(dns_message_t));
@@ -58,6 +60,21 @@ void set_parameters(uint8_t *packet,int packet_size) {
     printf("\n");
 }
 
+void set_id_ttl(uint8_t *packet,int packet_size,uint16_t id,uint32_t ttl) {
+    dns_message_t *new;
+    printf("converting to id %x ",id);
+    packet[0] = (id>>8);
+    packet[1] = (id>>0);
+    printf("id became %x\n",(packet[0]<<8)|(packet[1]));
+    new = make_new_dns_message();
+    int start = get_question(new,packet,packet_size)+6;
+    free(new);
+    packet[start+0]=(uint8_t)(ttl>>24);
+    packet[start+1]=(uint8_t)(ttl>>16);
+    packet[start+2]=(uint8_t)(ttl>>8);
+    packet[start+3]=(uint8_t)(ttl>>0);
+    
+}
 
 /* gets relevent infomation about dns header */
 void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size) {
@@ -150,7 +167,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     );
     start+=4;
 
-    /* we dont want to read the responce unless it is IPv6 */
+    /* we dont want to read the response unless it is IPv6 */
     if(new_dns_message->response.is_AAAA!=1) {
         return;
     }
@@ -177,7 +194,7 @@ void print_message(dns_message_t *dns_message) {
     printf("\n");
     printf("-------------------------------------------------\n");
     printf("-------------------- header ---------------------\n");
-    printf("ID: %x",dns_message->header.id);
+    printf("ID: %d",dns_message->header.id);
     printf(" ,QR: %d",dns_message->header.QR);
     printf(" ,NQ: %d",dns_message->nq);
     printf(" ,NA: %d\n",dns_message->nr);
@@ -189,9 +206,11 @@ void print_message(dns_message_t *dns_message) {
     if (dns_message->nr>0) {
         printf("------------------- response --------------------\n");
         printf("isAAA: %d",dns_message->response.is_AAAA);
-        printf(" ,TTL: %d\n",dns_message->response.ttl);
+        printf(" ,TTL: %d",dns_message->response.ttl);
         if(dns_message->response.is_AAAA) {
-            printf("IPv6: %s",dns_message->response.ipadr);
+            printf("IPv6: %s\n",dns_message->response.ipadr);
+        } else {
+            printf("\n");
         }
 
     }
@@ -229,9 +248,6 @@ char *get_log_message(dns_message_t *dns_message) {
         // is a query
         sprintf(log,"%s requested %s\n",timestamp,dns_message->question.domn);
     } 
-
-    
-    
 
     // if message was not an AAAA then add extra line to log
     if (dns_message->question.is_AAAA == false) {
@@ -282,4 +298,5 @@ void hex_dump(uint8_t *packet,int packet_size) {
     printf("|\n");
     printf("-------------------------------------------------\n");
 }
+
 

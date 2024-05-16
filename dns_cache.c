@@ -10,24 +10,24 @@
 #define MAX_TIMESTAMP_LEN 128
 #define MAX_LOGLINE_LENGTH 700
 
-cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *packet,int packet_size) {
+cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *buffer,int buffer_size) {
     cache_item_t *ci;
     ci = malloc(sizeof(*ci));
     strcpy(ci->domn,domname);
-    ci->TTL = ttl;
-    ci->packet = packet;
-    ci->packet_size = packet_size;  
+    ci->ttl = ttl;
+    ci->buffer = buffer;
+    ci->buffer_size = buffer_size;  
     return ci;
 }
 
 /* returns the old cache item evicted, returns NULL if none are evicted*/
-cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item) {
+cache_item_t *add_to_cache(cache_t *cache,cache_item_t *new_cache_item) {
     int i;
     update_cache_ttl(cache);
     // see if there are any empty spaces
     for(i=0;i<SIZE;i++) {
-        if (cache.cache_arr[i]==NULL) {
-            cache.cache_arr[i] = new_cache_item;
+        if (cache->cache_arr[i]==NULL) {
+            cache->cache_arr[i] = new_cache_item;
             return NULL;
         }
     }
@@ -35,39 +35,42 @@ cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item) {
     // no empty spaces found evict the shortest one
     int min=0;
     for(i=0;i<SIZE;i++) {
-        if (cache.cache_arr[i]->TTL<cache.cache_arr[min]->TTL) {
+        if (cache->cache_arr[i]->ttl<cache->cache_arr[min]->ttl) {
             min = i;
         }
     }
 
-    cache_item_t *temp = cache.cache_arr[min];
-    cache.cache_arr[min] = new_cache_item;
+    cache_item_t *temp = cache->cache_arr[min];
+    cache->cache_arr[min] = new_cache_item;
     return temp;
 
 }
 
-cache_item_t *find_cache_item(cache_t cache,char *domname) {
+/* finds a cache entry for a domain name */
+cache_item_t *find_cache_item(cache_t *cache,char *domname) {
     int i;
     update_cache_ttl(cache);
     for(i=0;i<SIZE;i++) {
-        if (strcmp(cache.cache_arr[i]->domn,domname)==0) {
-            return cache.cache_arr[i];
+        if ((cache->cache_arr[i]!=NULL)&&
+            (strcmp(cache->cache_arr[i]->domn,domname)==0)) {
+            return cache->cache_arr[i];
         }
     }
     return NULL;
 }
 
-void update_cache_ttl(cache_t cache) {
+/* updates the cache entries ttl */
+void update_cache_ttl(cache_t *cache) {
     int i;
     time_t t = time(NULL);
-    int delta = (int)difftime(t,cache.lastupdate);
-    cache.lastupdate = t;
+    int delta = (int)difftime(t,cache->lastupdate);
+    cache->lastupdate = t;
     for(i=0;i<SIZE;i++) {
-        if (cache.cache_arr[i]!=NULL) {
-            if ((int)(cache.cache_arr[i]->TTL) <= delta) {
-                cache.cache_arr[i]->TTL = 0;
+        if (cache->cache_arr[i]!=NULL) {
+            if ((int)(cache->cache_arr[i]->ttl) <= delta) {
+                cache->cache_arr[i]->ttl = 0;
             } else {
-                cache.cache_arr[i]->TTL = cache.cache_arr[i]->TTL - delta;
+                cache->cache_arr[i]->ttl = cache->cache_arr[i]->ttl - delta;
             }
         }
     }
@@ -97,7 +100,8 @@ char *usage_cache_message(cache_item_t *cache_item) {
 
 }
 char *evict_cache_message(cache_item_t *old,cache_item_t *new) {
-    assert(old!=NULL && new!=NULL);
+    assert(new!=NULL);
+    if (old==NULL) return NULL;
     char timetemp[MAX_TIMESTAMP_LEN] = "", log[MAX_LOGLINE_LENGTH] = ""; 
     time_t rawtime;
     struct tm *timeptr;

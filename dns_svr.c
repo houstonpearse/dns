@@ -3,6 +3,7 @@
 // code adapted from week9 materials
 
 #include "dns_message.h"
+#include "dns_cache.h"
 
 #include <ctype.h>
 #include <netdb.h>
@@ -18,12 +19,13 @@
 #define BYTE_TO_BIT 8
 #define NOT_REPLY 0
 #define REPLY 1
+#define CACHE
 
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
 int setup_forwarding_socket(char ip[],char port[]);
 int setup_listening_socket();
-void handle_new_connection(int newsockfd_inc,int sockfd_out);
+void handle_new_connection(cache_t *cache,int newsockfd_inc,int sockfd_out);
 void write_log_message(char *message);
 
 
@@ -31,6 +33,7 @@ int main(int argc,char** argv) {
     int sockfd_out,sockfd_inc,newsockfd_inc;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
+    cache_t *cache;
 
 
     /* the ip and port of the server the messages will be forwarded to */
@@ -44,6 +47,11 @@ int main(int argc,char** argv) {
 
     /* sets up socket to receive incomming connections and listens */
     sockfd_inc = setup_listening_socket();
+
+    /* setup cache */
+    cache = malloc(sizeof(*cache));
+    cache->lastupdate = time(NULL);
+
 
     
     while(true) {
@@ -66,9 +74,8 @@ int main(int argc,char** argv) {
 
         sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
 
-        
         printf("handling new connection...\n");
-        handle_new_connection(newsockfd_inc,sockfd_out);
+        handle_new_connection(cache,newsockfd_inc,sockfd_out);
 
         close(sockfd_out);
         
@@ -83,75 +90,96 @@ int main(int argc,char** argv) {
 /**************** helpers *****************/
 
 /* handles new connections */
-void handle_new_connection(int newsockfd_inc,int sockfd_out) {
+void handle_new_connection(cache_t *cache,int newsockfd_inc,int sockfd_out) {
     int inc_mes_len,out_mes_len;
     uint8_t *cbuffer,*upsbuffer;
     dns_message_t *out_message,*inc_message;
-    char *logstring;
+    cache_item_t *cache_search_val,*new_cache_val,*evicted;
+    char *logstring,*cachestring;
 
     printf("reading from client...\n");
-    /* read from client. will store message len in inc_mes_len */
     cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
-
     
-    /* write to log */
     printf("creating dns struct...\n");
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
+    
     printf("writing to log...\n");
     logstring = get_log_message(inc_message);
     write_log_message(logstring);
+    
     print_message(inc_message);
+
+    printf("searching for cached value...\n");
+    cache_search_val = find_cache_item(cache,inc_message->question.domn);
 
     /* if we have received a non AAAA query */
     if(inc_message->question.is_AAAA == false) {
         
         printf("request was for IPv4, set rcode and parameters...\n");
-        // set Rcode in query to 4
         set_parameters(&cbuffer[2],inc_mes_len-2);
+        upsbuffer = cbuffer;
+        out_mes_len = inc_mes_len;
+        cbuffer = NULL;
+        inc_mes_len = -1;
         
-        printf("creating the altered dns struct...\n");
-        out_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
+        //printf("creating the altered dns struct...\n");
+        //out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
+        //print_message(out_message);
+        //free_dns_message(out_message);
+        
+        
+    } else if (cache_search_val != NULL && cache_search_val->ttl>0) {
+        printf("cache was matched and ttl is non-zero...\n");
+        upsbuffer = cache_search_val->buffer;
+        out_mes_len = cache_search_val->buffer_size;
+        set_id_ttl(&upsbuffer[2],out_mes_len-2,inc_message->header.id,
+            cache_search_val->ttl);
+        cachestring = usage_cache_message(cache_search_val);
+        write_log_message(cachestring);
+
+    } else {
+
+        printf("forwarding to server...\n");
+        /* forward message to server */
+        write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
+    
+        printf("reading from server...\n");
+        /* get response from server */
+        upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
+
+        out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
+
+        /* add to cache */
+        if (out_message->nr>0) {
+            printf("creating a new cache val...\n");
+            new_cache_val = new_cache_item(out_message->question.domn,
+                out_message->response.ttl,
+                upsbuffer,
+                out_mes_len
+            );
+            
+            printf("adding the new cache val...\n");
+            evicted = add_to_cache(cache,new_cache_val);
+            cachestring = evict_cache_message(evicted,new_cache_val);
+            write_log_message(cachestring);
+        }
+
+
+        /* log it */
+        
+        logstring = get_log_message(out_message);
+        write_log_message(logstring);
         print_message(out_message);
 
-        printf("send altered packet back...\n");
-        // write back to client
-        write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
-
-        printf("closing connection...\n");
-        close(newsockfd_inc);
-        free_dns_message(inc_message);
-        free_dns_message(out_message);
-        free(cbuffer);
-        return;
-        
     }
     
-    printf("forwarding to server...\n");
-    /* forward message to server */
-    write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
     
-    printf("reading from server...\n");
-    /* get response from server */
-    upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
-
-    /* log it */
-    out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
-    logstring = get_log_message(out_message);
-    write_log_message(logstring);
-    print_message(out_message);
-    
-
     printf("forwarding to client...\n");
-    /* forward server response to client */
+    /* forward message to client */
     write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
     
     printf("closing connection...\n");
     close(newsockfd_inc);
-
-    free_dns_message(out_message);
-    free_dns_message(inc_message);
-    free(cbuffer);
-    free(upsbuffer);
 
 }
 

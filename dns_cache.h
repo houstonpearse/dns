@@ -1,5 +1,5 @@
-#ifndef DNS_CACHING
-#define DNS_CACHING
+#ifndef DNS_CACHE
+#define DNS_CACHE
 
 #include <stdint.h>
 #include <time.h>
@@ -11,9 +11,9 @@
 
 typedef struct cache_item {
     char domn[MAX_DOMNAME_LEN];
-    uint32_t TTL;
-    uint8_t *packet;
-    int packet_size;
+    uint32_t ttl;
+    uint8_t *buffer;
+    int buffer_size;
 }cache_item_t;
 
 typedef struct cache {
@@ -21,13 +21,13 @@ typedef struct cache {
     time_t lastupdate;
 }cache_t;
 
-cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *packet,int packet_size);
+cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *buffer,int buffer_size);
 
-cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item);
+cache_item_t *add_to_cache(cache_t *cache,cache_item_t *new_cache_item);
 
-cache_item_t *find_cache_item(cache_t cache,char *domname);
+cache_item_t *find_cache_item(cache_t *cache,char *domname);
 
-void update_cache_ttl(cache_t cache);
+void update_cache_ttl(cache_t *cache);
 
 char *evict_cache_message(cache_item_t *old,cache_item_t *new);
 

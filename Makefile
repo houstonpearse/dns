@@ -14,19 +14,18 @@ BIN=dns_svr
 #     <tab>commands_to_make_target
 # (Note that spaces will not work.)
 
-$(BIN): dns_svr.c $(OBJ)
-	$(CC) -o $(BIN) dns_svr.c $(OBJ) $(COPT)
+$(BIN): src/dns_svr.c $(OBJ)
+	$(CC) -lpthread -o $(BIN) src/dns_svr.c $(OBJ) $(COPT)
 
 
 # Wildcard rule to make any  .o  file,
 # given a .c and .h file with the same leading filename component
-%.o: %.c %.h
+%.o: src/%.c src/%.h
 	$(CC) -c $< $(COPT) -g
 
 format:
 	clang-format -i *.c *.h
 
 clean:
-	rm -f *.o dns_svr part1
+	rm -f *.o dns_svr 
 	rm -f dns_svr.log
-	rm -f -r *.dSYM

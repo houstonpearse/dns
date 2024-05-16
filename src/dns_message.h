@@ -36,16 +36,16 @@ typedef struct dns_message {
 dns_message_t *new_dns_message(uint8_t *packet,int packet_size);
 
 /* allocate memory for new dns_message */
-dns_message_t *make_new_dns_message();
+dns_message_t *make_new_dns_message(void);
 
 /* free memory allocated for the struct */
 void free_dns_message(dns_message_t *dns_message);
 
 /* set Rcode to 4 and the recursion bit*/
-void set_parameters(uint8_t *packet,int packet_size);
+void set_packet_headers(uint8_t *packet,int packet_size,int id, int qr, int rcode, int recursion);
 
 /* sets id and ttl to the specified values */
-void set_id_ttl(uint8_t *packet,int packet_size,uint16_t id,uint32_t ttl);
+void set_answer_ttl(uint8_t *packet,int packet_size,uint32_t ttl);
 
 /* gets relevent infomation about dns header */
 void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size);

@@ -10,6 +10,7 @@
 #define MAX_TIMESTAMP_LEN 128
 #define MAX_LOGLINE_LENGTH 700
 
+/* creates a new cache item, doesnt need to block*/
 cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *buffer,int buffer_size) {
     cache_item_t *ci;
     ci = malloc(sizeof(*ci));
@@ -20,7 +21,9 @@ cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *buffer,int buff
     return ci;
 }
 
-/* returns the old cache item evicted, returns NULL if none are evicted*/
+/* returns the old cache item evicted, returns NULL if none are evicted
+ * accesses a shared resource. should be locked
+*/
 cache_item_t *add_to_cache(cache_t *cache,cache_item_t *new_cache_item) {
     int i;
     cache_item_t *temp1,*temp2;
@@ -55,7 +58,9 @@ cache_item_t *add_to_cache(cache_t *cache,cache_item_t *new_cache_item) {
 
 }
 
-/* finds a cache entry for a domain name */
+/* finds a cache entry for a domain name. accesses a shared resource
+ * should be locked
+*/
 cache_item_t *find_cache_item(cache_t *cache,char *domname) {
     int i;
     update_cache_ttl(cache);
@@ -68,7 +73,7 @@ cache_item_t *find_cache_item(cache_t *cache,char *domname) {
     return NULL;
 }
 
-/* updates the cache entries ttl */
+/* updates the cache entries ttl, should be locked */
 void update_cache_ttl(cache_t *cache) {
     int i;
     time_t t = time(NULL);

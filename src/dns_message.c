@@ -18,7 +18,9 @@
 /* creates new dns message from a dns packet */
 dns_message_t *new_dns_message(uint8_t *packet,int packet_size) {
     int offset;
-
+    if (packet_size < 12) {
+        return NULL;
+    }
     dns_message_t *message = make_new_dns_message();
     get_header(message,packet,packet_size);
     offset = get_question(message,packet,packet_size);
@@ -30,7 +32,7 @@ dns_message_t *new_dns_message(uint8_t *packet,int packet_size) {
 }
 
 /* allocate memory for new dns_message */
-dns_message_t *make_new_dns_message() {
+dns_message_t *make_new_dns_message(void) {
     dns_message_t *new_dns_message = malloc(sizeof(dns_message_t));
     return new_dns_message;
 }
@@ -39,47 +41,56 @@ void free_dns_message(dns_message_t *dns_message) {
     free(dns_message);
 }
 
-/* set query parameters for a response */
-
-void set_parameters(uint8_t *packet,int packet_size) {
-    print_binary(packet[2]);
-    printf("|");
-    print_binary(packet[3]);
-    printf("\n");
-
+/* set query parameters for a response
+set value to -1 if it is to be unchanged
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                         ID                    |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                      QDCOUNT                  |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                      ANCOUNT                  |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                      NSCOUNT                  |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                      ARCOUNT                  |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ */
+void set_packet_headers(uint8_t *packet,int packet_size,int id, int qr, int rcode, int recursion) {
+    // set ID bytes
+    if (id>=0 && id<=65535 ) {
+        packet[0] = (id>>8); // big endian
+        packet[1] = (id>>0);
+    }
     // set QR bit
-    packet[2] = packet[2] | (1<<7);
+    if ( qr==0 || qr == 1 ) {
+        packet[2] = packet[2] | (qr<<7);
+    }
     // set rcode bits
-    packet[3] = ((packet[3]>>4)<<4) | 4;
+    if ( rcode>=0 && rcode <=15) {
+        packet[3] = ((packet[3]>>4)<<4) | rcode;
+    }
     // set recursion bit
-    packet[3] = packet[3] | (1<<7);
-
-    print_binary(packet[2]);
-    printf("|");
-    print_binary(packet[3]);
-    printf("\n");
+    if (recursion==0 || recursion==1) {
+        packet[3] = packet[3] | (recursion<<7);
+    }
 }
 
-void set_id_ttl(uint8_t *packet,int packet_size,uint16_t id,uint32_t ttl) {
-    dns_message_t *new;
-    printf("converting to id %x ",id);
-    packet[0] = (id>>8);
-    packet[1] = (id>>0);
-    printf("id became %x\n",(packet[0]<<8)|(packet[1]));
-    new = make_new_dns_message();
-    int start = get_question(new,packet,packet_size)+6;
+void set_answer_ttl(uint8_t *packet,int packet_size,uint32_t ttl) {
+    dns_message_t *new = make_new_dns_message();
+    int question_end = get_question(new,packet,packet_size);
+    int ttl_start = question_end+6;
     free(new);
-    packet[start+0]=(uint8_t)(ttl>>24);
-    packet[start+1]=(uint8_t)(ttl>>16);
-    packet[start+2]=(uint8_t)(ttl>>8);
-    packet[start+3]=(uint8_t)(ttl>>0);
+    packet[ttl_start+0]=(uint8_t)(ttl>>24);
+    packet[ttl_start+1]=(uint8_t)(ttl>>16);
+    packet[ttl_start+2]=(uint8_t)(ttl>>8);
+    packet[ttl_start+3]=(uint8_t)(ttl>>0);
     
 }
 
 /* gets relevent infomation about dns header */
 void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size) {
-    assert(packet_size>12);
-
     /* we get id from first two bytes */
     new_dns_message->header.id = (packet[0]<<8)|(packet[1]);
     /* find out if this packet is a question or response*/
@@ -176,7 +187,6 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     rlen = (packet[start]<<8)|(packet[start+1]);
     start+=2;
 
-    printf("rlen is %d\n",rlen);
     assert(packet_size>=start+rlen);
     
     /* read byte string */

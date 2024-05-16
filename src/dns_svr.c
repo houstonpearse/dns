@@ -1,16 +1,12 @@
-// a dns server using TCP 
-// by Houston Pearse 994653
-// code adapted from week9 materials
-
 #include "dns_message.h"
 #include "dns_cache.h"
-
 #include <ctype.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define LOG_FILE_PATH "dns_svr.log"
 #define LOCAL_PORT_NUM "8053"
@@ -20,21 +16,30 @@
 #define NOT_REPLY 0
 #define REPLY 1
 #define CACHE
+#define NONBLOCKING
 
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
 int setup_forwarding_socket(char ip[],char port[]);
-int setup_listening_socket();
-void handle_new_connection(cache_t *cache,int newsockfd_inc,int sockfd_out);
+int setup_listening_socket(void);
+void *handle_new_connection(void *args);
 void write_log_message(char *message);
+struct arguments {
+    cache_t *cache;
+    int newsockfd_inc;
+    int sockfd_out;
+};
 
+pthread_mutex_t cachelock;
+pthread_mutex_t connectionlock;
+pthread_mutex_t filelock;
 
 int main(int argc,char** argv) {
     int sockfd_out,sockfd_inc,newsockfd_inc;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
     cache_t *cache;
-
+    struct arguments *args;
 
     /* the ip and port of the server the messages will be forwarded to */
     if (argc < 3) {
@@ -44,7 +49,6 @@ int main(int argc,char** argv) {
     FILE *fp = fopen(LOG_FILE_PATH,"a");
     fclose(fp);
 
-
     /* sets up socket to receive incomming connections and listens */
     sockfd_inc = setup_listening_socket();
 
@@ -52,16 +56,17 @@ int main(int argc,char** argv) {
     cache = malloc(sizeof(*cache));
     cache->lastupdate = time(NULL);
 
-
-    
+    args= malloc(sizeof(*args));
+    args->cache = cache;
+    printf("-------------------------------IPV6-DNS-------------------------------\n");
+    printf("setup upstream connection...\n");
+    sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
+    printf("upstream connection initiated\n");
     while(true) {
-        printf("\n\n-------------------------------------------------\n");
         printf("waiting for new connections...\n");
         /* accept a connection request on our listening socket */
         client_addr_size = sizeof client_addr;
-        newsockfd_inc = 
-        accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
-        
+        newsockfd_inc = accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
         
         /* check if we succeeded */
         if (newsockfd_inc < 0) {
@@ -70,14 +75,12 @@ int main(int argc,char** argv) {
         }
         
         printf("accepted a new connection. socketfd = %d\n",newsockfd_inc);
-        printf("setup upstream connection...\n");
-
-        sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
-
-        printf("handling new connection...\n");
-        handle_new_connection(cache,newsockfd_inc,sockfd_out);
-
-        close(sockfd_out);
+        args = malloc(sizeof(*args));
+        args->cache = cache;
+        args->newsockfd_inc = newsockfd_inc;
+        args->sockfd_out = sockfd_out;
+        pthread_t t;
+        pthread_create(&t,NULL,handle_new_connection,args);
         
     }
 
@@ -90,97 +93,109 @@ int main(int argc,char** argv) {
 /**************** helpers *****************/
 
 /* handles new connections */
-void handle_new_connection(cache_t *cache,int newsockfd_inc,int sockfd_out) {
-    int inc_mes_len,out_mes_len;
+void *handle_new_connection(void *args) {
+    // unpack args from struct and free struct
+    cache_t *cache = ((struct arguments*)args)->cache;
+    int newsockfd_inc = ((struct arguments*)args)->newsockfd_inc;
+    int sockfd_out = ((struct arguments*)args)->sockfd_out;
+    free(args);
+
+    int i,inc_mes_len,out_mes_len;
     uint8_t *cbuffer,*upsbuffer;
     dns_message_t *out_message,*inc_message;
     cache_item_t *cache_search_val,*new_cache_val,*evicted;
     char *logstring,*cachestring;
 
-    printf("reading from client...\n");
+    printf("(%d) reading from client...\n",newsockfd_inc);
     cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
-    
-    printf("creating dns struct...\n");
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
-    
-    printf("writing to log...\n");
+    if (inc_message == NULL) {
+        printf("(%d) Invalid DNS Query\n",newsockfd_inc);
+        pthread_mutex_unlock(&cachelock);
+        close(newsockfd_inc);
+        return NULL;
+    } 
+
+    printf("(%d) received client request\n",newsockfd_inc);
     logstring = get_log_message(inc_message);
     write_log_message(logstring);
     
-    print_message(inc_message);
-
-    printf("searching for cached value...\n");
-    cache_search_val = find_cache_item(cache,inc_message->question.domn);
-
-    /* if we have received a non AAAA query */
     if(inc_message->question.is_AAAA == false) {
+        printf("(%d) IPV4 Request Not Implemented.\n",newsockfd_inc);
+        set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,4,1);
+        write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+        close(newsockfd_inc);
+        return NULL;
+    } 
+
+    pthread_mutex_lock(&cachelock);
+    cache_search_val = find_cache_item(cache,inc_message->question.domn);
+    if (cache_search_val != NULL && cache_search_val->ttl>0) {
+        printf("(%d) Cache hit for %s\n",newsockfd_inc,inc_message->question.domn);
         
-        printf("request was for IPv4, set rcode and parameters...\n");
-        set_parameters(&cbuffer[2],inc_mes_len-2);
-        upsbuffer = cbuffer;
-        out_mes_len = inc_mes_len;
-        cbuffer = NULL;
-        inc_mes_len = -1;
-        
-        //printf("creating the altered dns struct...\n");
-        //out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
-        //print_message(out_message);
-        //free_dns_message(out_message);
-        
-        
-    } else if (cache_search_val != NULL && cache_search_val->ttl>0) {
-        printf("cache was matched and ttl is non-zero...\n");
-        upsbuffer = cache_search_val->buffer;
+        // copy buffer from cache
+        upsbuffer = malloc(cache_search_val->buffer_size*sizeof(*upsbuffer));
         out_mes_len = cache_search_val->buffer_size;
-        set_id_ttl(&upsbuffer[2],out_mes_len-2,inc_message->header.id,
-            cache_search_val->ttl);
+        for (i=0;i<out_mes_len;i++) {
+            upsbuffer[i]=cache_search_val->buffer[i];
+        }
+    
+        // edit ttl and id bytes in the cached copy
+        set_packet_headers(&upsbuffer[2],out_mes_len-2,inc_message->header.id,-1,-1,-1);
+        set_answer_ttl(&upsbuffer[2],out_mes_len-2,cache_search_val->ttl);
+
+        // log event
         cachestring = usage_cache_message(cache_search_val);
         write_log_message(cachestring);
         write_log_message(get_log_message(new_dns_message(&upsbuffer[2],out_mes_len-2)));
-
-    } else {
-
-        printf("forwarding to server...\n");
-        /* forward message to server */
-        write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
-    
-        printf("reading from server...\n");
-        /* get response from server */
-        upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
-
-        out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
-
-        /* add to cache */
-        if (out_message->nr>0) {
-            printf("creating a new cache val...\n");
-            new_cache_val = new_cache_item(out_message->question.domn,
-                out_message->response.ttl,
-                upsbuffer,
-                out_mes_len
-            );
-            
-            printf("adding the new cache val...\n");
-            evicted = add_to_cache(cache,new_cache_val);
-            cachestring = evict_cache_message(evicted,new_cache_val);
-            write_log_message(cachestring);
-        }
-
-
-        /* log it */
         
-        logstring = get_log_message(out_message);
-        write_log_message(logstring);
-        print_message(out_message);
-
+        // send back response
+        write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
+        close(newsockfd_inc);
+        pthread_mutex_unlock(&cachelock);
+        return NULL;
     }
+    pthread_mutex_unlock(&cachelock);
     
-    
-    printf("forwarding to client...\n");
+    /* forward AAAA query to upstream*/
+    printf("(%d) forwarding to upstream server...\n",newsockfd_inc);
+    pthread_mutex_lock(&connectionlock);
+    write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
+    printf("(%d) reading response from upstream server...\n",newsockfd_inc);
+    upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
+    pthread_mutex_unlock(&connectionlock);
+
+    out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
+    if (out_message == NULL) {
+        printf("(%d) Received an empty response from upstream server\n",newsockfd_inc);
+        close(newsockfd_inc);
+        return NULL;
+    }
+
+    /* add to cache if we have an answer */
+    if (out_message->nr>0) {
+        new_cache_val = new_cache_item(out_message->question.domn,
+            out_message->response.ttl,
+            upsbuffer,
+            out_mes_len
+        );
+        pthread_mutex_lock(&cachelock);
+        evicted = add_to_cache(cache,new_cache_val);
+        cachestring = evict_cache_message(evicted,new_cache_val);
+        pthread_mutex_unlock(&cachelock);
+        write_log_message(cachestring);
+    }
+
+
+    /* log response from upstream*/
+    logstring = get_log_message(out_message);
+    write_log_message(logstring);
+
     /* forward message to client */
     write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
-    
-    printf("closing connection...\n");
+    printf("(%d) forwarded upstream response to client",newsockfd_inc);
     close(newsockfd_inc);
+    return NULL;
 
 }
 
@@ -189,12 +204,10 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     uint8_t *buffer;
     int current_len=0,bytes_to_read=0,bytes_read=0;
 
-    printf("allocating memory header...\n");
     // allocate memory for two byte tcp size header
     buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
 
     // read two byte size header
-    printf("reading size header...\n");
     current_len += read(sockfd,buffer,TCP_SIZE_HEADER);
 
     // get number of bytes of the remaining message
@@ -202,7 +215,6 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     bytes_to_read = ntohs(*(uint16_t*)buffer);
     //bytes_to_read = *(uint16_t*)buffer;
     //*(uint16_t*)buffer = htons(*(uint16_t*)buffer);
-    printf("size is %d, reallocate...\n",bytes_to_read);
     buffer = realloc(buffer,(bytes_to_read+TCP_SIZE_HEADER)*sizeof(uint8_t));
 
 
@@ -216,11 +228,9 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
         }
     }
 
-    printf("got message...\n");
     *sizeptr = current_len;
     hex_dump(buffer,current_len);
     return buffer;
-
 }
 
 /* writes a buffer to a socket. will keep trying to send untill entire buffer
@@ -236,7 +246,6 @@ void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
         bytes_rem-=bytes_written;
         bytes_sent+=bytes_written;
         if(bytes_rem==0) {
-            printf("wrote %d bytes. bufferlen is %d\n",bytes_sent,buffer_size);
             return;
         }
     }
@@ -244,7 +253,7 @@ void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
 }
 
 /* sets up listening socket */
-int setup_listening_socket() {
+int setup_listening_socket(void) {
     struct addrinfo hints,*res;
     int re,s,sockfd;
 
@@ -324,11 +333,14 @@ int setup_forwarding_socket(char ip[],char port[]) {
 
 }
 
+
 void write_log_message(char *message) {
     if (message==NULL) return;
+    pthread_mutex_lock(&filelock);
     FILE *fp = fopen(LOG_FILE_PATH,"a");
     fprintf(fp,"%s",message);
     fflush(fp);
     fclose(fp);
+    pthread_mutex_unlock(&filelock);
 }
 

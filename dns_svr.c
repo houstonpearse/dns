@@ -23,12 +23,12 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
 int setup_forwarding_socket(char ip[],char port[]);
 int setup_listening_socket();
-void handle_new_connection(int newsockfd_inc,int sockfd_out, int *first);
-void write_log_message(char *message,int *first);
+void handle_new_connection(int newsockfd_inc,int sockfd_out);
+void write_log_message(char *message);
 
 
 int main(int argc,char** argv) {
-    int sockfd_out,sockfd_inc,newsockfd_inc,first=1;
+    int sockfd_out,sockfd_inc,newsockfd_inc;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
 
@@ -68,7 +68,7 @@ int main(int argc,char** argv) {
 
         
         printf("handling new connection...\n");
-        handle_new_connection(newsockfd_inc,sockfd_out,&first);
+        handle_new_connection(newsockfd_inc,sockfd_out);
 
         close(sockfd_out);
         
@@ -83,7 +83,7 @@ int main(int argc,char** argv) {
 /**************** helpers *****************/
 
 /* handles new connections */
-void handle_new_connection(int newsockfd_inc,int sockfd_out,int *first) {
+void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     int inc_mes_len,out_mes_len;
     uint8_t *cbuffer,*upsbuffer;
     dns_message_t *out_message,*inc_message;
@@ -99,12 +99,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out,int *first) {
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
     printf("writing to log...\n");
     logstring = get_log_message(inc_message);
-    if (logstring!=NULL) {
-        printf("--log--\n");
-        printf("%s\n",logstring);
-        printf("--log--\n");
-        write_log_message(logstring,first);
-    }
+    write_log_message(logstring);
     print_message(inc_message);
 
     /* if we have received a non AAAA query */
@@ -138,14 +133,11 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out,int *first) {
     printf("reading from server...\n");
     /* get response from server */
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
+
+    /* log it */
     out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
     logstring = get_log_message(out_message);
-    if (logstring!=NULL) {
-        printf("--log--\n");
-        printf("%s\n",logstring);
-        printf("--log--\n");
-        write_log_message(logstring,first);
-    }
+    write_log_message(logstring);
     print_message(out_message);
     
 
@@ -303,13 +295,10 @@ int setup_forwarding_socket(char ip[],char port[]) {
 
 }
 
-void write_log_message(char *message,int *first) {
+void write_log_message(char *message) {
     if (message==NULL) return;
     FILE *fp = fopen(LOG_FILE_PATH,"a");
-    if(*first) {
-        fprintf(fp,"%s",message);
-    }
-    fprintf(fp,"%s\n",message);
+    fprintf(fp,"%s",message);
     fflush(fp);
     fclose(fp);
 }

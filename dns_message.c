@@ -9,6 +9,8 @@
 #include <string.h>
 #include <netdb.h>
 
+#define MAX_TIME_LEN 128
+#define MAX_LOG_LEN 1024
 
 
 
@@ -193,29 +195,29 @@ void print_message(dns_message_t *dns_message) {
 char *get_log_message(dns_message_t *dns_message) {
     time_t rawtime;
     struct tm *timeptr;
-    char timetemp[128] = "", temp[512]  = "", log[512] = ""; 
+    char timestamp[MAX_TIME_LEN] = "", temp[MAX_LOG_LEN]  = "", log[MAX_LOG_LEN] = ""; 
     
 
     /* setup time stamp */
     time(&rawtime);
     timeptr = localtime(&rawtime);
-    strftime(timetemp, 100, "%FT%T%z", timeptr);
-    strcat(log,timetemp);
-
+    strftime(timestamp, MAX_TIME_LEN, "%FT%T%z", timeptr);
+    
     /* dont write to the log if its a reply with no answer */
     if(dns_message->header.QR==1 && dns_message->nr == 0) {
         return NULL;
 
     } else if (dns_message->header.QR==1 && dns_message->nr!=0) {
         // is a response
-        sprintf(temp," %s is at %s",
-            dns_message->question.domn,dns_message->response.ipadr);
-        strcat(log,temp);
+        sprintf(log,"%s %s is at %s\n",
+            timestamp,
+            dns_message->question.domn,
+            dns_message->response.ipadr
+        );
 
     } else if (dns_message->header.QR==0) {
         // is a query
-        sprintf(temp," requested %s",dns_message->question.domn);
-        strcat(log,temp);
+        sprintf(log,"%s requested %s\n",timestamp,dns_message->question.domn);
     } 
 
     
@@ -223,14 +225,9 @@ char *get_log_message(dns_message_t *dns_message) {
 
     // if message was not an AAAA then add extra line to log
     if (dns_message->question.is_AAAA == false) {
-        // add new line character
-        int len = strlen(log);
-        log[len] = '\n';
-        log[len+1] = '\0';
         // add timestamp to log
-        strcat(log,timetemp);
         // add message to log
-        strcpy(temp," unimplemented request");
+        sprintf(temp,"%s unimplemented request\n",timestamp);
         strcat(log,temp);
     }
 

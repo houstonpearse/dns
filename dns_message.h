@@ -49,4 +49,8 @@ void print_message(dns_message_t *dns_message);
 
 void write_to_log(dns_message_t *dns_message);
 
+void print_binary(uint8_t n);
+
+void set_rcode(uint8_t *packet,int packet_size,int rcode);
+
 #endif

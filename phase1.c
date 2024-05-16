@@ -13,7 +13,7 @@
 void hex_dump(uint8_t *packet,int packet_size);
 void binary_dump(uint8_t *packet,int packet_size);
 
-void print_binary(uint8_t n);
+//void print_binary(uint8_t n);
 void print_hex(uint8_t n);
 
 int main(int argc, char* argv[]) {
@@ -52,12 +52,13 @@ int main(int argc, char* argv[]) {
 void print_hex(uint8_t n) {
     printf("%02X ",n);
 }
-
+/*
 void print_binary(uint8_t n) {
     uint8_t i1 = (1 << (sizeof(n)*8-1));
     for(; i1; i1 >>= 1)
       printf("%d  ",(n&i1)!=0);
 }
+*/
 
 /* helper function to format result to inspect easily */
 void hex_dump(uint8_t *packet,int packet_size) {
@@ -82,7 +83,7 @@ void hex_dump(uint8_t *packet,int packet_size) {
     printf("|\n");
     printf("-------------------------------------------------\n");
 }
-
+/*
 void binary_dump(uint8_t *packet,int packet_size) {
     int i;
     printf("-------------------------------------------------\n");
@@ -102,3 +103,4 @@ void binary_dump(uint8_t *packet,int packet_size) {
     }
     printf("-------------------------------------------------\n");
 }
+*/

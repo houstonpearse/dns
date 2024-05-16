@@ -31,6 +31,19 @@ dns_message_t *make_new_dns_message() {
     return new_dns_message;
 }
 
+/* set Rcode */
+
+void set_rcode(uint8_t *packet,int packet_size,int rcode) {
+    assert(packet_size>4);
+    assert(rcode<16);
+
+    uint8_t val = packet[3];
+
+    print_binary(val);
+    val = ((val>>4)<<4) + rcode;
+    print_binary(val);
+}
+
 /* gets relevent infomation about dns header */
 void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size) {
     assert(packet_size>12);
@@ -178,8 +191,18 @@ void write_to_log(dns_message_t *dns_message) {
     }
     printf("%s",log);
     fprintf(fp,"%s",log);
+    fflush(fp);
     fclose(fp);
     //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache
     //<timestamp> replacing <domain_name> by <domain_name> – for each cache eviction
-
+    
 }
+
+void print_binary(uint8_t n) {
+    uint8_t i1 = (1 << (sizeof(n)*8-1));
+    for(; i1; i1 >>= 1) {
+      printf("%d  ",(n&i1)!=0);
+    }
+    printf("\n");
+}
+

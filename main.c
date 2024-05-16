@@ -62,6 +62,8 @@ int main(int argc,char** argv) {
 
         sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
 
+        printf("setup upstream connection\n");
+
         handle_new_connection(newsockfd_inc,sockfd_out);
 
         close(sockfd_out);
@@ -90,6 +92,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     /* write to log */
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
     write_to_log(inc_message);
+    print_message(inc_message);
 
     /* if we have received a non AAAA query */
     if(inc_message->question.is_AAAA == false) {
@@ -114,6 +117,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
     out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
     write_to_log(out_message);
+    print_message(out_message);
     
 
     printf("forwarding to client...\n");
@@ -144,8 +148,9 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     current_len += read(sockfd,buffer,TCP_SIZE_HEADER);
 
     // get number of bytes of the remaining message
-    //bytes_to_read = buffer[0]<<8 | buffer[1];
-    bytes_to_read = ntohs(*(uint16_t*)buffer);
+    bytes_to_read = buffer[0]<<8 | buffer[1];
+    //bytes_to_read = ntohs(*(uint16_t*)buffer);
+    //*(uint16_t*)buffer = htons(*(uint16_t*)buffer);
     printf("size is %d, reallocate...\n",bytes_to_read);
     buffer = realloc(buffer,(bytes_to_read+TCP_SIZE_HEADER)*sizeof(uint8_t));
 

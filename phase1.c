@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     read(STDIN_FILENO,packet,packet_size);
 
     dns_message_t *message = new_dns_message(packet,packet_size);
-    write_to_log(message,isreply);
+    write_to_log(message);
     set_parameters(packet,packet_size);
 
 

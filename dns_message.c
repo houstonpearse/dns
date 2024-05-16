@@ -36,13 +36,14 @@ dns_message_t *make_new_dns_message() {
 void set_rcode(uint8_t *packet,int packet_size,int rcode) {
     assert(packet_size>4);
     assert(rcode<16);
-
+    // set recursion bit
+    packet[2] = packet[2] | 1;
+    
+    // set rcode bits
     uint8_t val = packet[3];
-
-    print_binary(val);
     val = ((val>>4)<<4) + rcode;
-    print_binary(val);
 }
+
 
 /* gets relevent infomation about dns header */
 void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size) {

@@ -34,3 +34,4 @@ format:
 clean:
 	rm -f *.o dns_svr phase1
 	rm -f dns_svr.log
+	rm -f -r *.dSYM

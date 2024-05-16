@@ -33,15 +33,15 @@ dns_message_t *make_new_dns_message() {
 
 /* set Rcode */
 
-void set_rcode(uint8_t *packet,int packet_size,int rcode) {
+void set_rcode(uint8_t *packet,int packet_size,uint8_t rcode) {
     assert(packet_size>4);
     assert(rcode<16);
+
     // set recursion bit
     packet[2] = packet[2] | 1;
-    
+
     // set rcode bits
-    uint8_t val = packet[3];
-    val = ((val>>4)<<4) + rcode;
+    packet[3] = ((packet[3]>>4)<<4) | rcode;
 }
 
 
@@ -221,6 +221,5 @@ void print_binary(uint8_t n) {
     for(; i1; i1 >>= 1) {
       printf("%d  ",(n&i1)!=0);
     }
-    printf("\n");
 }
 

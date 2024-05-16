@@ -1,15 +1,20 @@
 #include "dns_cache.h"
 
-#include <string.h>
+#include <netdb.h>
 #include <time.h>
+#include <string.h>
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-cache_item_t *new_cache_item(dns_message_t *message,uint8_t *packet,int packet_size) {
+cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *packet,int packet_size) {
     cache_item_t *ci;
     ci = malloc(sizeof(*ci));
-    strcpy(ci->domn,message->question.domn);
-    ci->TTL = message->response.ttl;
+    strcpy(ci->domn,domname);
+    ci->TTL = ttl;
     ci->packet = packet;
     ci->packet_size = packet_size;  
+    return ci;
 }
 
 /* returns the old cache item evicted, returns NULL if none are evicted*/
@@ -38,11 +43,11 @@ cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item) {
 
 }
 
-cache_item_t *find_cache_item(cache_t cache,dns_message_t *inc_message) {
+cache_item_t *find_cache_item(cache_t cache,char *domname) {
     int i;
     update_cache_ttl(cache);
     for(i=0;i<SIZE;i++) {
-        if (strcmp(cache.cache_arr[i]->domn,inc_message->question.domn)==0) {
+        if (strcmp(cache.cache_arr[i]->domn,domname)==0) {
             return cache.cache_arr[i];
         }
     }

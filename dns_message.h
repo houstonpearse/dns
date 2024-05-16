@@ -2,6 +2,8 @@
 #define DNS_MESSAGE
 
 
+#include <stdbool.h>
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <netdb.h>

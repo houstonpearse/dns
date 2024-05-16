@@ -1,6 +1,7 @@
-#include "dns_message.h"
+#ifndef DNS_CACHE
+#define DNS_CACHE
 
-#include <netdb.h>
+#include <stdint.h>
 #include <time.h>
 
 #define SIZE 5
@@ -20,11 +21,11 @@ typedef struct cache {
     time_t lastupdate;
 }cache_t;
 
-cache_item_t *new_cache_item(dns_message_t *message,uint8_t *packet,int packet_size);
+cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *packet,int packet_size);
 
 cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item);
 
-cache_item_t *find_cache_item(cache_t cache,dns_message_t *inc_message);
+cache_item_t *find_cache_item(cache_t cache,char *domname);
 
 void update_cache_ttl(cache_t cache);
 
@@ -34,3 +35,4 @@ char *usage_cache_message(cache_item_t *cache_item);
 
 
 
+#endif

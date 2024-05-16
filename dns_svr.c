@@ -62,7 +62,7 @@ int main(int argc,char** argv) {
             exit(EXIT_FAILURE);
         }
         
-        printf("accepted a new connection. %d\n",newsockfd_inc);
+        printf("accepted a new connection. socketfd = %d\n",newsockfd_inc);
         printf("setup upstream connection...\n");
 
         sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
@@ -88,6 +88,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     int inc_mes_len,out_mes_len;
     uint8_t *cbuffer,*upsbuffer;
     dns_message_t *out_message,*inc_message;
+    char *logstring;
 
     printf("reading from client...\n");
     /* read from client. will store message len in inc_mes_len */
@@ -98,7 +99,10 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     printf("creating dns struct...\n");
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
     printf("writing to log...\n");
-    write_log_message(get_log_message(inc_message));
+    logstring = get_log_message(inc_message);
+    if (logstring!=NULL) {
+        write_log_message(logstring);
+    }
     print_message(inc_message);
 
     /* if we have received a non AAAA query */
@@ -125,7 +129,6 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
         
     }
     
-
     printf("forwarding to server...\n");
     /* forward message to server */
     write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
@@ -134,7 +137,10 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     /* get response from server */
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
     out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
-    write_log_message(get_log_message(out_message));
+    logstring = get_log_message(out_message);
+    if (logstring!=NULL) {
+        write_log_message(logstring);
+    }
     print_message(out_message);
     
 

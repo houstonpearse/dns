@@ -11,7 +11,6 @@
 #define MAX_LOGLINE_LENGTH 700
 
 cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *buffer,int buffer_size) {
-    int i;
     cache_item_t *ci;
     ci = malloc(sizeof(*ci));
     strcpy(ci->domn,domname);
@@ -24,14 +23,14 @@ cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *buffer,int buff
 /* returns the old cache item evicted, returns NULL if none are evicted*/
 cache_item_t *add_to_cache(cache_t *cache,cache_item_t *new_cache_item) {
     int i;
-    cache_item_t *temp;
+    cache_item_t *temp1,*temp2;
     update_cache_ttl(cache);
     // always evict 0 items with 0 length
     for(i=0;i<SIZE;i++) {
         if (cache->cache_arr[i]!=NULL && cache->cache_arr[i]->ttl==0) {
-            temp = cache->cache_arr[i];
+            temp1 = cache->cache_arr[i];
             cache->cache_arr[i] = new_cache_item;
-            return temp;
+            return temp1;
         }
     }
     // see if there are any empty spaces
@@ -50,9 +49,9 @@ cache_item_t *add_to_cache(cache_t *cache,cache_item_t *new_cache_item) {
         }
     }
 
-    cache_item_t *temp = cache->cache_arr[min];
+    temp2 = cache->cache_arr[min];
     cache->cache_arr[min] = new_cache_item;
-    return temp;
+    return temp2;
 
 }
 

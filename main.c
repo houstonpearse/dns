@@ -22,9 +22,8 @@ int setup_forwarding_socket(char ip[],char port[]);
 int setup_listening_socket();
 
 int main(int argc,char** argv) {
-    int sockfd_out,sockfd_inc,newsockfd_inc, re, s,inc_mes_len,out_mes_len;
+    int sockfd_out,sockfd_inc,newsockfd_inc,inc_mes_len,out_mes_len;
 	uint8_t *cbuffer,*upsbuffer;
-	struct addrinfo hints_inc, hints_out, *res_inc, *res_out,*rp;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size = sizeof client_addr;
     dns_message_t *inc_message,*out_message;
@@ -134,7 +133,7 @@ int setup_listening_socket() {
     int re,s,sockfd;
 
     /* Create address we're going to listen on with port number 8053 */
-	memset(&hints, 0, sizeof res);
+	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;

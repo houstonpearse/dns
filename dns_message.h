@@ -37,6 +37,10 @@ dns_message_t *new_dns_message(uint8_t *packet,int packet_size);
 /* allocate memory for new dns_message */
 dns_message_t *make_new_dns_message();
 
+/* free memory allocated for the struct */
+void free_dns_message(dns_message_t *dns_message);
+
+/* set Rcode to 4 and the recursion bit*/
 void set_parameters(uint8_t *packet,int packet_size);
 
 /* gets relevent infomation about dns header */
@@ -45,14 +49,19 @@ void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size);
 /* returns offset for the end of the question */
 int get_question(dns_message_t *new_dns_message,uint8_t *packet,int packet_size);
 
+/* helper to extract response info from dns packet */
 void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int packet_size);
 
+/* prints the infomation extracted out of the dns message*/
 void print_message(dns_message_t *dns_message);
 
-void write_to_log(dns_message_t *dns_message,int isreply);
+/* writes a log for the dns message given*/
+void write_to_log(dns_message_t *dns_message);
 
+/* helps inspect the bits for setting parameters*/
 void print_binary(uint8_t n);
 
+/* helps inspect the whole message */
 void hex_dump(uint8_t *packet,int packet_size);
 
 

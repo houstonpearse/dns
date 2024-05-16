@@ -80,7 +80,7 @@ int main(int argc,char** argv) {
 void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     int inc_mes_len,out_mes_len;
     uint8_t *cbuffer,*upsbuffer;
-    dns_message_t *inc_message;
+    dns_message_t *out_message,*inc_message;
 
     printf("reading from client...\n");
     /* read from client. will store message len in inc_mes_len */
@@ -89,10 +89,12 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     printf("writing to log...\n");
     /* write to log */
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
-    write_to_log(inc_message,NOT_REPLY);
+    write_to_log(inc_message);
 
     /* if we have received a non AAAA query */
     if(inc_message->question.is_AAAA == false) {
+        free_dns_message(inc_message);
+        free(cbuffer);
         // set Rcode in query to 4
         set_parameters(&cbuffer[2],inc_mes_len-2);
         // write back to client
@@ -101,6 +103,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
         return;
         
     }
+    
 
     printf("forwarding to server...\n");
     /* forward message to server */
@@ -109,7 +112,9 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     printf("reading from server...\n");
     /* get response from server */
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
-    write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),REPLY);
+    out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
+    write_to_log(out_message);
+    
 
     printf("forwarding to client...\n");
     /* forward server response to client */
@@ -117,6 +122,11 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     
     printf("closing connection\n");
     close(newsockfd_inc);
+
+    free_dns_message(out_message);
+    free_dns_message(inc_message);
+    free(cbuffer);
+    free(upsbuffer);
 
 }
 
@@ -134,7 +144,8 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     current_len += read(sockfd,buffer,TCP_SIZE_HEADER);
 
     // get number of bytes of the remaining message
-    bytes_to_read = buffer[0]<<8 | buffer[1];
+    //bytes_to_read = buffer[0]<<8 | buffer[1];
+    bytes_to_read = ntohs(*(uint16_t*)buffer);
     printf("size is %d, reallocate...\n",bytes_to_read);
     buffer = realloc(buffer,(bytes_to_read+TCP_SIZE_HEADER)*sizeof(uint8_t));
 
@@ -160,22 +171,20 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
  *is received
 */
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
-    //int bytes_sent=0,bytes_rem = buffer_size,bytes_written;
-    int n;
-    n = write(sockfd,buffer,buffer_size);
+    int bytes_written,bytes_sent,bytes_rem;
     
-    
-    printf("wrote %d bytes. bufferlen is %d\n",n,buffer_size);
-    /*
+    bytes_rem = buffer_size;
+    bytes_sent = 0;
     while(true) {
         bytes_written=write(sockfd,&buffer[bytes_sent],bytes_rem);
         bytes_rem-=bytes_written;
         bytes_sent+=bytes_written;
         if(bytes_rem==0) {
+            printf("wrote %d bytes. bufferlen is %d\n",bytes_sent,buffer_size);
             return;
         }
     }
-    */
+    
 }
 
 /* sets up listening socket */

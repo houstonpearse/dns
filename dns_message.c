@@ -31,6 +31,10 @@ dns_message_t *make_new_dns_message() {
     return new_dns_message;
 }
 
+void free_dns_message(dns_message_t *dns_message) {
+    free(dns_message);
+}
+
 /* set query parameters for a response */
 
 void set_parameters(uint8_t *packet,int packet_size) {
@@ -174,35 +178,38 @@ void print_message(dns_message_t *dns_message) {
 }
 
 
-void write_to_log(dns_message_t *dns_message,int isreply) {
+void write_to_log(dns_message_t *dns_message) {
     FILE *fp = fopen(LOGFILEPATH,"a");
     time_t rawtime;
     struct tm *timeptr;
     char timetemp[100+1] = "",log[500] = "", temp[500]  = ""; 
     
-    /* dont write to the log if its a reply with no answer */
-    if(isreply && dns_message->nr == 0) {
-        fflush(fp);
-        fclose(fp);
-        return;
-    }
 
     /* setup time stamp */
     time(&rawtime);
     timeptr = localtime(&rawtime);
     strftime(timetemp, 100, "%FT%T%z", timeptr);
     strcat(log,timetemp);
-    
-    // write request or response to log
-    if (dns_message->nr == 0) {
+
+    /* dont write to the log if its a reply with no answer */
+    if(dns_message->header.QR==1 && dns_message->nr == 0) {
+        fflush(fp);
+        fclose(fp);
+        return;
+
+    } else if (dns_message->header.QR==1 && dns_message->nr!=0) {
+        // is a response
+        sprintf(temp," %s is at %s\n",
+            dns_message->question.domn,dns_message->response.ipadr);
+        strcat(log,temp);
+
+    } else if (dns_message->header.QR==0) {
         // is a query
         sprintf(temp," requested %s\n",dns_message->question.domn);
         strcat(log,temp);
-    } else {
-        // is a response
-        sprintf(temp," %s is at %s\n",dns_message->question.domn,dns_message->response.ipadr);
-        strcat(log,temp);
-    }
+    } 
+
+    
     printf("%s",log);
     fprintf(fp,"%s",log);
 

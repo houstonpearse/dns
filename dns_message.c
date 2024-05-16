@@ -139,6 +139,12 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     start+=2;
 
     /* skip TTL */
+    new_dns_message->response.ttl = (
+        (packet[start+0]<<3*8)|
+        (packet[start+1]<<2*8)|
+        (packet[start+2]<<1*8)|
+        (packet[start+3]<<0)
+    );
     start+=4;
 
     /* get response length */
@@ -178,11 +184,10 @@ void print_message(dns_message_t *dns_message) {
 }
 
 
-void write_to_log(dns_message_t *dns_message) {
-    FILE *fp = fopen(LOGFILEPATH,"a");
+char *get_log_message(dns_message_t *dns_message) {
     time_t rawtime;
     struct tm *timeptr;
-    char timetemp[100+1] = "",log[500] = "", temp[500]  = ""; 
+    char timetemp[128] = "", temp[512]  = "", log[512] = ""; 
     
 
     /* setup time stamp */
@@ -193,9 +198,7 @@ void write_to_log(dns_message_t *dns_message) {
 
     /* dont write to the log if its a reply with no answer */
     if(dns_message->header.QR==1 && dns_message->nr == 0) {
-        fflush(fp);
-        fclose(fp);
-        return;
+        return NULL;
 
     } else if (dns_message->header.QR==1 && dns_message->nr!=0) {
         // is a response
@@ -210,24 +213,22 @@ void write_to_log(dns_message_t *dns_message) {
     } 
 
     
-    printf("%s",log);
-    fprintf(fp,"%s",log);
+    
 
     // if message was not an AAAA then add extra line to log
     if (dns_message->question.is_AAAA == false) {
-        //reset log string
-        log[0]=0;
         // add timestamp to log
-        strcpy(log,timetemp);
+        strcat(log,timetemp);
         // add message to log
         strcpy(temp," unimplemented request\n");
         strcat(log,temp);
-        printf("%s",log);
-        fprintf(fp,"%s",log);
     }
 
-    fflush(fp);
-    fclose(fp);
+    printf("%s",log);
+
+    char *str = malloc(strlen(log)*sizeof(*str));
+    strcpy(str,log);
+    return str;
     //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache
     //<timestamp> replacing <domain_name> by <domain_name> – for each cache eviction
     

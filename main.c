@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#define LOG_FILE_PATH "dns_svr.log"
 #define LOCAL_PORT_NUM "8053"
 #define LISTEN_QUEUE_NUM 20
 #define TCP_SIZE_HEADER 2
@@ -20,10 +21,10 @@
 
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
-
 int setup_forwarding_socket(char ip[],char port[]);
 int setup_listening_socket();
 void handle_new_connection(int newsockfd_inc,int sockfd_out);
+void write_log_message(char *message);
 
 
 int main(int argc,char** argv) {
@@ -37,6 +38,9 @@ int main(int argc,char** argv) {
 		fprintf(stderr, "usage %s serverIP port\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
+    FILE *fp = fopen(LOGFILEPATH,"a");
+    fflush(fp);
+    fclose(fp);
 
 
     /* sets up socket to receive incomming connections and listens */
@@ -91,18 +95,20 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     printf("writing to log...\n");
     /* write to log */
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
-    write_to_log(inc_message);
+    write_log_message(get_log_message(inc_message));
     print_message(inc_message);
 
     /* if we have received a non AAAA query */
     if(inc_message->question.is_AAAA == false) {
-        free_dns_message(inc_message);
-        free(cbuffer);
+        
+        
         // set Rcode in query to 4
         set_parameters(&cbuffer[2],inc_mes_len-2);
         // write back to client
         write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
         close(newsockfd_inc);
+        free_dns_message(inc_message);
+        free(cbuffer);
         return;
         
     }
@@ -116,7 +122,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     /* get response from server */
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
     out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
-    write_to_log(out_message);
+    write_log_message(get_log_message(out_message));
     print_message(out_message);
     
 
@@ -148,8 +154,9 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     current_len += read(sockfd,buffer,TCP_SIZE_HEADER);
 
     // get number of bytes of the remaining message
-    bytes_to_read = buffer[0]<<8 | buffer[1];
-    //bytes_to_read = ntohs(*(uint16_t*)buffer);
+    //bytes_to_read = buffer[0]<<8 | buffer[1];
+    bytes_to_read = ntohs(*(uint16_t*)buffer);
+    //bytes_to_read = *(uint16_t*)buffer;
     //*(uint16_t*)buffer = htons(*(uint16_t*)buffer);
     printf("size is %d, reallocate...\n",bytes_to_read);
     buffer = realloc(buffer,(bytes_to_read+TCP_SIZE_HEADER)*sizeof(uint8_t));
@@ -271,5 +278,13 @@ int setup_forwarding_socket(char ip[],char port[]) {
 
     return sockfd;
 
+}
+
+void write_log_message(char *message) {
+    if (message==NULL) return;
+    FILE *fp = fopen(LOGFILEPATH,"a");
+    fprintf(fp,"%s",message);
+    fflush(fp);
+    fclose(fp);
 }
 

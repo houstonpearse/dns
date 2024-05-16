@@ -22,6 +22,7 @@ typedef struct question {
 typedef struct response {
     char ipadr[INET6_ADDRSTRLEN];
     bool is_AAAA;
+    uint32_t ttl;
 }response_t;
 
 typedef struct dns_message {
@@ -56,7 +57,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 void print_message(dns_message_t *dns_message);
 
 /* writes a log for the dns message given*/
-void write_to_log(dns_message_t *dns_message);
+char *get_log_message(dns_message_t *dns_message);
 
 /* helps inspect the bits for setting parameters*/
 void print_binary(uint8_t n);

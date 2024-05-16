@@ -3,7 +3,7 @@
 # OBJ - compiled source files that should be linked
 # COPT - compiler flags
 # BIN - binary
-CC=clang
+CC=gcc
 OBJ=dns_message.o
 COPT=-Wall -Wpedantic -g
 BIN_PHASE1=phase1

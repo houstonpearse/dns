@@ -24,11 +24,6 @@ int main(int argc, char* argv[]) {
     /* get size from the first two bytes */
     read(STDIN_FILENO, size_buffer, 2);
 
-    if(argc==2 && strcmp(argv[1],"query")==0) {
-        isreply = 0;
-    } else {
-        isreply = 1;
-    }
 
     /* 1st byte 0x9F is left shifted to by 8 bits to become 0x9F00 */
     /* 2nd byte 0xA2 is concatenated (|)to the first byte to get 0x9FA2 with */
@@ -39,8 +34,8 @@ int main(int argc, char* argv[]) {
     read(STDIN_FILENO,packet,packet_size);
 
     dns_message_t *message = new_dns_message(packet,packet_size);
-    write_to_log(message);
-    set_parameters(packet,packet_size);
+    printf("%s",get_log_message(message));
+    //set_parameters(packet,packet_size);
 
 
     /*

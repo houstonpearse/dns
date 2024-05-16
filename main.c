@@ -12,14 +12,18 @@
 #include <unistd.h>
 
 #define LOCAL_PORT_NUM "8053"
+#define TCP_SIZE_HEADER 2
+#define BYTE_TO_BIT 8
+
+uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
 
 int main(int argc,char** argv) {
-    int sockfd_out,sockfd_inc,newsockfd_inc, re, s,len;
+    int sockfd_out,sockfd_inc,newsockfd_inc, re, s,inc_mes_len,out_mes_len;
 	uint8_t *cbuffer,*upsbuffer;
 	struct addrinfo hints_inc, hints_out, *res_inc, *res_out,*rp;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
-    dns_message_t *message;
+    dns_message_t *inc_message,*out_message;
 
 
     /* the ip and port of the server the messages will be forwarded to */
@@ -122,51 +126,48 @@ int main(int argc,char** argv) {
         
         /************ read message from a client ******************/
         
-        /* first two bytes is for packet size */
-        cbuffer = malloc(2*sizeof(uint8_t));
-        if (read(newsockfd_inc,cbuffer,2)!=2) {
-            printf("failed to read size from client query\n");
-        }
+        cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
 
-        /* read rest of message from client */
-        len = ((cbuffer[0]<<8)|cbuffer[1]);
-        cbuffer = realloc(cbuffer,len+2);
-        if(read(newsockfd_inc,&cbuffer[2],len)!=len) {
-            printf("whole message not read from client\n");
-        }
-
-        message = new_dns_message(&cbuffer[2],len);
-        write_to_log(message);
+        /* write to log */
+        inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
+        write_to_log(inc_message);
 
         /*************** forward message to server ***************/
 
-        if (write(sockfd_out, cbuffer, len+2)!=len+2) {
+        if (write(sockfd_out, cbuffer, inc_mes_len)!=inc_mes_len) {
             printf("whole message not sent to up stream\n");
         }
 
         /***************** read response from server ************/
 
-        /* get size of responce from first two bytes */
-        upsbuffer = malloc(2*sizeof(uint8_t));
-        if(read(sockfd_out,upsbuffer,2)!=2) {
-            printf("failed to read size from upstream response\n");
-        }
+        upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
+        out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
 
-        len = ((upsbuffer[0]<<8)|upsbuffer[1]);
-        upsbuffer = realloc(upsbuffer,len+2);
-        if(read(sockfd_out,&upsbuffer[2],len)!=len) {
-            printf("whole message not received by server from upsteam\n");
-        }
-
-        //message = new_dns_message(&upsbuffer[2],len);
-        //print_message(message);
-        //print_log(message);
 
         /************* forward response to client *************/
 
-        if(write(newsockfd_inc,upsbuffer,len+2)!=len+2) {
-            printf("whole message not received by client\n");
+        /* check if request was ipv6 */
+        if(inc_message->question.is_AAAA == false) {
+            // change inc_message to have Rcode 4
+            set_rcode(&cbuffer[2],inc_mes_len-2,4);
+            // send original message back with Rcode 4
+            if(write(newsockfd_inc,cbuffer,inc_mes_len)!=inc_mes_len) {
+                printf("whole message not received by client\n");
+            }
+        } else {
+            // send message received from upstream
+            if(write(newsockfd_inc,upsbuffer,out_mes_len)!=out_mes_len) {
+                printf("whole message not received by client\n");
+            }
+            /* write to log */
+            write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2));
         }
+
+        
+
+        
+
+        
 
 
         close(newsockfd_inc);
@@ -177,3 +178,29 @@ int main(int argc,char** argv) {
     
     
 }
+
+/**************** helpers *****************/
+
+/* reads a response packet from a socket, stores size in pointer */
+uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
+    uint8_t *buffer;
+    int packet_len,total_len;
+    /* first two bytes is for packet size */
+    buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
+    if (read(sockfd,buffer,TCP_SIZE_HEADER)!=TCP_SIZE_HEADER) {
+        printf("ERROR: failed to read TCP size header\n");
+    }
+
+    /* read rest of message from client */
+    packet_len = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
+    total_len = packet_len + TCP_SIZE_HEADER;
+    buffer = realloc(buffer,total_len);
+    if(read(sockfd,&buffer[2],packet_len)!=packet_len) {
+        printf("ERROR: failed to read whole tcp message\n");
+    }
+
+    *sizeptr = total_len;
+    return buffer;
+    
+}
+

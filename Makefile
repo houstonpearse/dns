@@ -34,4 +34,3 @@ format:
 clean:
 	rm -f *.o dns_svr phase1
 	rm -f dns_svr.log
-	# implement this, to remove $(BIN_PHASE[12]) and any .o files

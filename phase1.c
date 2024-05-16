@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 void hex_dump(uint8_t *packet,int packet_size);
 void binary_dump(uint8_t *packet,int packet_size);
@@ -18,10 +19,16 @@ void print_hex(uint8_t n);
 
 int main(int argc, char* argv[]) {
     uint8_t *packet,size_buffer[2];
-    int packet_size;
+    int packet_size,isreply;
 
     /* get size from the first two bytes */
     read(STDIN_FILENO, size_buffer, 2);
+
+    if(argc==2 && strcmp(argv[1],"query")==0) {
+        isreply = 0;
+    } else {
+        isreply = 1;
+    }
 
     /* 1st byte 0x9F is left shifted to by 8 bits to become 0x9F00 */
     /* 2nd byte 0xA2 is concatenated (|)to the first byte to get 0x9FA2 with */
@@ -32,12 +39,15 @@ int main(int argc, char* argv[]) {
     read(STDIN_FILENO,packet,packet_size);
 
     dns_message_t *message = new_dns_message(packet,packet_size);
-    print_message(message);
-    write_to_log(message);
+    write_to_log(message,isreply);
 
-    /* print packet */
+
+    /*
+    // print
+    print_message(message);
     hex_dump(packet,packet_size);
     //binary_dump(packet,packet_size);
+    */
 
     return 0; 
 }
@@ -46,19 +56,10 @@ int main(int argc, char* argv[]) {
 
 /** helper functions **/
 
-
-
-
 void print_hex(uint8_t n) {
     printf("%02X ",n);
 }
-/*
-void print_binary(uint8_t n) {
-    uint8_t i1 = (1 << (sizeof(n)*8-1));
-    for(; i1; i1 >>= 1)
-      printf("%d  ",(n&i1)!=0);
-}
-*/
+
 
 /* helper function to format result to inspect easily */
 void hex_dump(uint8_t *packet,int packet_size) {
@@ -83,24 +84,4 @@ void hex_dump(uint8_t *packet,int packet_size) {
     printf("|\n");
     printf("-------------------------------------------------\n");
 }
-/*
-void binary_dump(uint8_t *packet,int packet_size) {
-    int i;
-    printf("-------------------------------------------------\n");
-    printf("0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 |\n");
-    printf("----------------------------------------------- |\n");
-    for (i=0;i<packet_size;i++){
-        print_binary(packet[i]);
-        if (i%2==1){
-            printf("|\n");
-        }
-        if(i==11) {
-            printf("----------------------------------------------- |\n");
-        }
-    }
-    if(i%2==1) {
-        printf("                        |\n");
-    }
-    printf("-------------------------------------------------\n");
-}
-*/
+

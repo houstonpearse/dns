@@ -165,7 +165,12 @@ void print_message(dns_message_t *dns_message) {
 }
 
 
-void write_to_log(dns_message_t *dns_message) {
+void write_to_log(dns_message_t *dns_message,int isreply) {
+    /* dont write to the log if its a reply with no answer */
+    if(isreply && dns_message->nr == 0) {
+        return;
+    }
+
     FILE *fp = fopen(LOGFILEPATH,"a");
     time_t rawtime;
     struct tm *timeptr;

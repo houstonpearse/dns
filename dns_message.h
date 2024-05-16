@@ -47,7 +47,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 
 void print_message(dns_message_t *dns_message);
 
-void write_to_log(dns_message_t *dns_message);
+void write_to_log(dns_message_t *dns_message,int isreply);
 
 void print_binary(uint8_t n);
 

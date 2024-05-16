@@ -79,10 +79,6 @@ int main(int argc,char** argv) {
 		close(sockfd_out);
 	}
 
-    
-
-    
-    
 
     /************* connect to new client and process   *************/
     while(true) {
@@ -130,7 +126,7 @@ int main(int argc,char** argv) {
 
         /* write to log */
         inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
-        write_to_log(inc_message);
+        write_to_log(inc_message,0);
 
         /*************** forward message to server ***************/
 
@@ -160,7 +156,7 @@ int main(int argc,char** argv) {
                 printf("whole message not received by client\n");
             }
             /* write to log */
-            write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2));
+            write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),1);
         }
 
         

@@ -17,9 +17,11 @@
 #define BYTE_TO_BIT 8
 
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
+void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
 
 int setup_forwarding_socket(char ip[],char port[]);
 int setup_listening_socket();
+
 
 int main(int argc,char** argv) {
     int sockfd_out,sockfd_inc,newsockfd_inc,inc_mes_len,out_mes_len;
@@ -114,7 +116,7 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
             current_len+=
             read(sockfd,&buffer[0+current_len],TCP_SIZE_HEADER-current_len);
             /* check if we can get the size from the first two bytes */
-            if (current_len==TCP_SIZE_HEADER) {
+            if (current_len == TCP_SIZE_HEADER) {
                 packet_len = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
                 total_len = packet_len + TCP_SIZE_HEADER;
                 buffer = realloc(buffer,total_len);
@@ -127,7 +129,7 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
             bytes_read=read(sockfd,&buffer[0+current_len],bytes_to_read);
             bytes_to_read-=bytes_read;
             current_len+=bytes_read;
-            if (bytes_to_read = 0) {
+            if (bytes_to_read == 0) {
                 *sizeptr = total_len;
                 return buffer;
             }
@@ -141,7 +143,7 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
     int bytes_sent=0,bytes_rem = buffer_size,bytes_written;
     while(true) {
-        bytes_written=write(sockfd,buffer[0+bytes_sent],bytes_rem);
+        bytes_written=write(sockfd,&buffer[0+bytes_sent],bytes_rem);
         bytes_rem-=bytes_written;
         bytes_sent+=bytes_written;
         if(bytes_rem==0) {

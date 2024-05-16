@@ -124,11 +124,9 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     assert(rlen = 16);
     
     /* read byte string */
-    printf("\n");
     for (i=0;i<16;i+=1) {
         ip[i] = packet[start+i];
     }
-    printf("\n");
 
     /* convert byte string into ip address */
     inet_ntop(AF_INET6,ip,new_dns_message->response.r,INET6_ADDRSTRLEN);

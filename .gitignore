@@ -5,6 +5,7 @@ phase1.exe
 dns_query
 dns_query.exe
 vgcore.*
+dns_svr
 *.sh
 *.o
 dns_message

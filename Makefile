@@ -7,7 +7,7 @@ CC=clang
 OBJ=dns_message.o
 COPT=-Wall -Wpedantic -g
 BIN_PHASE1=phase1
-BIN_PHASE2=dns_query
+BIN_PHASE2=dns_svr
 
 # Running "make" with no argument will make the first target in the file
 all: $(BIN_PHASE1) $(BIN_PHASE2)
@@ -32,4 +32,5 @@ format:
 	clang-format -i *.c *.h
 
 clean:
+	rm -f *.o dns_svr phase1
 	# implement this, to remove $(BIN_PHASE[12]) and any .o files

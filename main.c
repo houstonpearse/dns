@@ -2,6 +2,8 @@
 // by Houston Pearse 994653
 // code adapted from week9 materials
 
+#include "dns_message.h"
+
 #define _POSIX_C_SOURCE 200112L
 #include <ctype.h>
 #include <netdb.h>
@@ -13,11 +15,12 @@
 #define LOCAL_PORT_NUM "8053"
 
 int main(int argc,char** argv) {
-    int sockfd_out,sockfd_inc,newsockfd, re, s,len;
-	uint8_t *buffer;
+    int sockfd_out,sockfd_inc,newsockfd_inc, re, s,len;
+	uint8_t *cbuffer,*upsbuffer;
 	struct addrinfo hints_inc, hints_out, *res_inc, *res_out,*rp;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
+    dns_message_t *message;
 
 
     /* the ip and port of the server the messages will be forwarded to */
@@ -103,41 +106,67 @@ int main(int argc,char** argv) {
 
     /* accept a connection request */
     client_addr_size = sizeof client_addr;
-	newsockfd =
+	newsockfd_inc =
 		accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
-	if (newsockfd < 0) {
+	if (newsockfd_inc < 0) {
 		perror("accept");
 		exit(EXIT_FAILURE);
 	}
     
-    /* read message */
+    /************ read message from a client ******************/
     
     /* first two bytes is for packet size */
-    buffer = malloc(2*sizeof(uint8_t));
-    if (read(newsockfd,buffer,2)!=2) {
-        printf("failed to read size\n");
+    cbuffer = malloc(2*sizeof(uint8_t));
+    if (read(newsockfd_inc,cbuffer,2)!=2) {
+        printf("failed to read size from client query\n");
     }
 
-    len = ((buffer[0]<<8)|buffer[1]);
-    buffer = realloc(buffer,len+2);
-    if(read(newsockfd,&buffer[2],len)<len) {
-        printf("whole message not received\n");
+    /* read rest of message from client */
+    len = ((cbuffer[0]<<8)|cbuffer[1]);
+    cbuffer = realloc(cbuffer,len+2);
+    if(read(newsockfd_inc,&cbuffer[2],len)!=len) {
+        printf("whole message not read from client\n");
     }
 
-    /* forward message to server*/
-	if (write(sockfd_out, buffer, len+2)<len+2) {
-        printf("whole message not sent\n");
+    //message = new_dns_message(&cbuffer[2],len);
+    //print_message(message);
+    //print_log(message);
+
+    /*************** forward message to server ***************/
+
+	if (write(sockfd_out, cbuffer, len+2)!=len+2) {
+        printf("whole message not sent to up stream\n");
     }
+
+    /***************** read response from server ************/
+
+    /* get size of responce from first two bytes */
+    upsbuffer = malloc(2*sizeof(uint8_t));
+    if(read(sockfd_out,upsbuffer,2)!=2) {
+        printf("failed to read size from upstream response\n");
+    }
+
+    len = ((upsbuffer[0]<<8)|upsbuffer[1]);
+    upsbuffer = realloc(upsbuffer,len+2);
+    if(read(sockfd_out,&upsbuffer[2],len)!=len) {
+        printf("whole message not received by server from upsteam\n");
+    }
+
+    //message = new_dns_message(&upsbuffer[2],len);
+    //print_message(message);
+    //print_log(message);
+
+    /************* forward response to client *************/
+
+    if(write(newsockfd_inc,upsbuffer,len+2)!=len+2) {
+        printf("whole message not received by client\n");
+    }
+
+
 
 
     close(sockfd_inc);
     close(sockfd_out);
-    close(newsockfd);
-
-
-
-
-
-
+    close(newsockfd_inc);
     
 }

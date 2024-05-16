@@ -31,17 +31,25 @@ dns_message_t *make_new_dns_message() {
     return new_dns_message;
 }
 
-/* set Rcode */
+/* set query parameters for a response */
 
-void set_rcode(uint8_t *packet,int packet_size,uint8_t rcode) {
-    assert(packet_size>4);
-    assert(rcode<16);
+void set_parameters(uint8_t *packet,int packet_size) {
+    print_binary(packet[2]);
+    printf("|");
+    print_binary(packet[3]);
+    printf("\n");
 
-    // set recursion bit
-    packet[2] = packet[2] | 1;
-
+    // set QR bit
+    packet[2] = packet[2] | (1<<7);
     // set rcode bits
-    packet[3] = ((packet[3]>>4)<<4) | rcode;
+    packet[3] = ((packet[3]>>4)<<4) | 4;
+    // set recursion bit
+    packet[3] = packet[3] | (1<<7);
+
+    print_binary(packet[2]);
+    printf("|");
+    print_binary(packet[3]);
+    printf("\n");
 }
 
 
@@ -174,6 +182,8 @@ void write_to_log(dns_message_t *dns_message,int isreply) {
     
     /* dont write to the log if its a reply with no answer */
     if(isreply && dns_message->nr == 0) {
+        fflush(fp);
+        fclose(fp);
         return;
     }
 
@@ -184,7 +194,7 @@ void write_to_log(dns_message_t *dns_message,int isreply) {
     strcat(log,timetemp);
     
     // write request or response to log
-    if (dns_message->header.QR == 0) {
+    if (dns_message->nr == 0) {
         // is a query
         sprintf(temp," requested %s\n",dns_message->question.domn);
         strcat(log,temp);
@@ -221,6 +231,6 @@ void print_binary(uint8_t n) {
     for(; i1; i1 >>= 1) {
       printf("%d  ",(n&i1)!=0);
     }
-    printf("\n");
+
 }
 

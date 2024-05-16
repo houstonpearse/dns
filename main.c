@@ -15,6 +15,8 @@
 #define LISTEN_QUEUE_NUM 20
 #define TCP_SIZE_HEADER 2
 #define BYTE_TO_BIT 8
+#define NOT_REPLY 0
+#define REPLY 1
 
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
@@ -61,12 +63,12 @@ int main(int argc,char** argv) {
 
         /* write to log */
         inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
-        write_to_log(inc_message,0);
+        write_to_log(inc_message,NOT_REPLY);
 
         /* if we have received a non AAAA query */
         if(inc_message->question.is_AAAA == false) {
             // set Rcode in query to 4
-            set_rcode(&cbuffer[2],inc_mes_len-2,4);
+            set_parameters(&cbuffer[2],inc_mes_len-2);
             // write back to client
             write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
             close(newsockfd_inc);
@@ -80,7 +82,7 @@ int main(int argc,char** argv) {
         
         /* get response from server */
         upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
-        write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),1);
+        write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),REPLY);
 
 
         /* forward server response to client */

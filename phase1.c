@@ -40,6 +40,7 @@ int main(int argc, char* argv[]) {
 
     dns_message_t *message = new_dns_message(packet,packet_size);
     write_to_log(message,isreply);
+    set_parameters(packet,packet_size);
 
 
     /*

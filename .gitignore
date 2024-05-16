@@ -2,5 +2,11 @@
 *.gch
 phase1
 phase1.exe
+dns_query
+dns_query.exe
 vgcore.*
 *.sh
+*.o
+dns_message
+settings.json
+.vscode

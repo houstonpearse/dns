@@ -23,14 +23,13 @@ void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
 
 int setup_forwarding_socket(char ip[],char port[]);
 int setup_listening_socket();
+void handle_new_connection(int newsockfd_inc,int sockfd_out);
 
 
 int main(int argc,char** argv) {
-    int sockfd_out,sockfd_inc,newsockfd_inc,inc_mes_len,out_mes_len;
-	uint8_t *cbuffer,*upsbuffer;
+    int sockfd_out,sockfd_inc,newsockfd_inc;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size = sizeof client_addr;
-    dns_message_t *inc_message;
 
 
     /* the ip and port of the server the messages will be forwarded to */
@@ -57,39 +56,9 @@ int main(int argc,char** argv) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
+
+        handle_new_connection(newsockfd_inc,sockfd_out);
         
-        /* read from client. will store message len in inc_mes_len */
-        cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
-
-        /* write to log */
-        inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
-        write_to_log(inc_message,NOT_REPLY);
-
-        /* if we have received a non AAAA query */
-        if(inc_message->question.is_AAAA == false) {
-            // set Rcode in query to 4
-            set_parameters(&cbuffer[2],inc_mes_len-2);
-            // write back to client
-            write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
-            close(newsockfd_inc);
-            continue;
-            
-        }
-
-
-        /* forward message to server */
-        write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
-        
-        /* get response from server */
-        upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
-        write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),REPLY);
-
-
-        /* forward server response to client */
-        write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
-        
-
-        close(newsockfd_inc);
     }
 
     close(sockfd_inc);
@@ -100,36 +69,70 @@ int main(int argc,char** argv) {
 
 /**************** helpers *****************/
 
+/* handles new connections */
+void handle_new_connection(int newsockfd_inc,int sockfd_out) {
+    int inc_mes_len,out_mes_len;
+    uint8_t *cbuffer,*upsbuffer;
+    dns_message_t *inc_message;
+
+    /* read from client. will store message len in inc_mes_len */
+    cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
+
+    /* write to log */
+    inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
+    write_to_log(inc_message,NOT_REPLY);
+
+    /* if we have received a non AAAA query */
+    if(inc_message->question.is_AAAA == false) {
+        // set Rcode in query to 4
+        set_parameters(&cbuffer[2],inc_mes_len-2);
+        // write back to client
+        write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+        close(newsockfd_inc);
+        return;
+        
+    }
+
+
+    /* forward message to server */
+    write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
+    
+    /* get response from server */
+    upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
+    write_to_log(new_dns_message(&upsbuffer[2],out_mes_len-2),REPLY);
+
+
+    /* forward server response to client */
+    write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
+    
+
+    close(newsockfd_inc);
+
+}
+
 /* reads a response packet from a socket, stores size in pointer */
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     uint8_t *buffer;
-    int packet_len,total_len,current_len,bytes_to_read,bytes_read;
+    int current_len,bytes_to_read,bytes_read;
 
+    // allocate memory for two byte tcp size header
     buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
-    current_len = 0;
-    while (true) {
-        /* we have yet to read the two byte tcp size header */
-        if (current_len<TCP_SIZE_HEADER) {
-            current_len+=
-            read(sockfd,&buffer[0+current_len],TCP_SIZE_HEADER-current_len);
-            /* check if we can get the size from the first two bytes */
-            if (current_len == TCP_SIZE_HEADER) {
-                packet_len = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
-                total_len = packet_len + TCP_SIZE_HEADER;
-                buffer = realloc(buffer,total_len);
-                bytes_to_read = packet_len;
-            }
-        }
+    // read two byte size header
+    read(sockfd,&buffer,TCP_SIZE_HEADER);
+    current_len = TCP_SIZE_HEADER;
+    // get number of bytes of the remaining message
+    bytes_to_read = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
+    buffer = realloc(buffer,bytes_to_read+TCP_SIZE_HEADER);
 
-        /* if we have read the header, start reading rest of message */
-        if(current_len>=TCP_SIZE_HEADER) {
-            bytes_read=read(sockfd,&buffer[0+current_len],bytes_to_read);
-            bytes_to_read-=bytes_read;
-            current_len+=bytes_read;
-            if (bytes_to_read == 0) {
-                *sizeptr = total_len;
-                return buffer;
-            }
+
+    // read rest of message
+    while (true) {
+        bytes_read=read(sockfd,&buffer[current_len],bytes_to_read);
+        bytes_to_read-=bytes_read;
+        current_len+=bytes_read;
+        if (bytes_to_read == 0) {
+            *sizeptr = current_len;
+            return buffer;
         }
     }
 }

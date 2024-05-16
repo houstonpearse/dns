@@ -1,2 +1,3 @@
 dns_svr
 **/*.o
+dns_svr.log

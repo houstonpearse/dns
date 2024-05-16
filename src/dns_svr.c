@@ -157,17 +157,28 @@ void *handle_new_connection(void *args) {
     }
     pthread_mutex_unlock(&cachelock);
     
-    /* forward AAAA query to upstream*/
+    /* forward AAAA query to upstream server */
     printf("(%d) forwarding to upstream server...\n",newsockfd_inc);
     pthread_mutex_lock(&connectionlock);
     write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
     printf("(%d) reading response from upstream server...\n",newsockfd_inc);
     upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
     pthread_mutex_unlock(&connectionlock);
-
+    if (upsbuffer == NULL) {
+        printf("(%d) failed to read from upstream server",newsockfd_inc);
+        set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,2,-1);
+        write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+        close(newsockfd_inc);
+        return NULL;
+    }
+    
+    /* read upstream response */
     out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
     if (out_message == NULL) {
-        printf("(%d) Received an empty response from upstream server\n",newsockfd_inc);
+        printf("(%d) Received an unknown response from upstream server\n",newsockfd_inc);
+        set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,2,-1);
+        upsbuffer=cbuffer;
+        out_mes_len=inc_mes_len;
         close(newsockfd_inc);
         return NULL;
     }
@@ -193,7 +204,7 @@ void *handle_new_connection(void *args) {
 
     /* forward message to client */
     write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
-    printf("(%d) forwarded upstream response to client",newsockfd_inc);
+    printf("(%d) sent response to client\n",newsockfd_inc);
     close(newsockfd_inc);
     return NULL;
 
@@ -221,6 +232,9 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     // read rest of message
     while (true) {
         bytes_read=read(sockfd,&buffer[current_len],bytes_to_read);
+        if (bytes_read < 0) {
+            return NULL;
+        }
         bytes_to_read-=bytes_read;
         current_len+=bytes_read;
         if (bytes_to_read == 0) {
@@ -243,13 +257,16 @@ void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
     bytes_sent = 0;
     while(true) {
         bytes_written=write(sockfd,&buffer[bytes_sent],bytes_rem);
+        if (bytes_written < 0) {
+            fprintf(stderr,"Failed to write to socket (%d)\n",sockfd);
+            return;
+        }
         bytes_rem-=bytes_written;
         bytes_sent+=bytes_written;
         if(bytes_rem==0) {
             return;
         }
     }
-    
 }
 
 /* sets up listening socket */

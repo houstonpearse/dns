@@ -3,7 +3,7 @@
 #include <netdb.h>
 #include <time.h>
 
-#define CACHE_SIZE 5
+#define SIZE 5
 #define MAX_DOMNAME_LEN 240
 
 
@@ -16,7 +16,7 @@ typedef struct cache_item {
 }cache_item_t;
 
 typedef struct cache {
-    cache_item_t *cache_arr[CACHE_SIZE];
+    cache_item_t *cache_arr[SIZE];
     time_t lastupdate;
 }cache_t;
 

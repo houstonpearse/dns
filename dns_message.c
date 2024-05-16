@@ -138,7 +138,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     /* skip class */
     start+=2;
 
-    /* skip TTL */
+    /* TTL */
     new_dns_message->response.ttl = (
         (packet[start+0]<<3*8)|
         (packet[start+1]<<2*8)|
@@ -179,6 +179,8 @@ void print_message(dns_message_t *dns_message) {
     if (dns_message->nr>0) {
         printf("--------------- response -----------\n");
         printf("IPv6: %s\n",dns_message->response.ipadr);
+        printf("TTL: %d\n",dns_message->response.ttl);
+
     }
     printf("\n");
 }

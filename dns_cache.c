@@ -17,7 +17,7 @@ cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item) {
     int i;
     update_cache_ttl(cache);
     // see if there are any empty spaces
-    for(i=0;i<CACHE_SIZE;i++) {
+    for(i=0;i<SIZE;i++) {
         if (cache.cache_arr[i]==NULL) {
             cache.cache_arr[i] = new_cache_item;
             return NULL;
@@ -26,7 +26,7 @@ cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item) {
 
     // no empty spaces found evict the shortest one
     int min=0;
-    for(i=0;i<CACHE_SIZE;i++) {
+    for(i=0;i<SIZE;i++) {
         if (cache.cache_arr[i]->TTL<cache.cache_arr[min]->TTL) {
             min = i;
         }
@@ -41,7 +41,7 @@ cache_item_t *add_to_cache(cache_t cache,cache_item_t *new_cache_item) {
 cache_item_t *find_cache_item(cache_t cache,dns_message_t *inc_message) {
     int i;
     update_cache_ttl(cache);
-    for(i=0;i<CACHE_SIZE;i++) {
+    for(i=0;i<SIZE;i++) {
         if (strcmp(cache.cache_arr[i]->domn,inc_message->question.domn)==0) {
             return cache.cache_arr[i];
         }
@@ -54,7 +54,7 @@ void update_cache_ttl(cache_t cache) {
     time_t t = time(NULL);
     int delta = (int)difftime(t,cache.lastupdate);
     cache.lastupdate = t;
-    for(i=0;i<CACHE_SIZE;i++) {
+    for(i=0;i<SIZE;i++) {
         if (cache.cache_arr[i]!=NULL) {
             if ((int)(cache.cache_arr[i]->TTL) <= delta) {
                 cache.cache_arr[i]->TTL = 0;

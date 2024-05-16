@@ -104,10 +104,16 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
         
         // set Rcode in query to 4
         set_parameters(&cbuffer[2],inc_mes_len-2);
+        
+        out_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
+        print_message(out_message);
+
         // write back to client
         write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+        
         close(newsockfd_inc);
         free_dns_message(inc_message);
+        free_dns_message(out_message);
         free(cbuffer);
         return;
         

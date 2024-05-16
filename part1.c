@@ -19,7 +19,7 @@ void print_hex(uint8_t n);
 
 int main(int argc, char* argv[]) {
     uint8_t *packet,size_buffer[2];
-    int packet_size,isreply;
+    int packet_size;
 
     /* get size from the first two bytes */
     read(STDIN_FILENO, size_buffer, 2);

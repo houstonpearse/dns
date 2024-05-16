@@ -140,12 +140,12 @@ void print_message(dns_message_t *dns_message) {
     printf(" ,NQ: %d",dns_message->nq);
     printf(" ,NA: %d\n",dns_message->nr);
 
-    printf("------------- question ---------------\n");
+    printf("--------------- question -----------\n");
     printf("URL: %s",dns_message->question.domn);
     printf(" ,AAAA: %d\n",dns_message->question.is_AAAA);
 
     if (dns_message->nr>0) {
-        printf("----------------response-------------\n");
+        printf("--------------- response -----------\n");
         printf("IPv6: %s\n",dns_message->response.ipadr);
     }
     printf("\n");
@@ -158,8 +158,8 @@ void write_to_log(dns_message_t *dns_message) {
     struct tm *timeptr;
     char timetemp[100+1] = "",log[500] = "", temp[500]  = ""; 
     
-    timeptr = localtime(&rawtime);
     time(&rawtime);
+    timeptr = localtime(&rawtime);
     strftime(timetemp, 100, "%FT%T%z", timeptr);
 
     strcat(log,timetemp);

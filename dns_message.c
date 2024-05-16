@@ -1,6 +1,7 @@
 #include "dns_message.h"
 
 #include <stdint.h>
+#include <time.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -36,7 +37,7 @@ void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size) 
 
     /* we get id from first two bytes */
     new_dns_message->header.id = (packet[0]<<8)|(packet[1]);
-    /* find out if this packet is a question or responce*/
+    /* find out if this packet is a question or response*/
     new_dns_message->header.QR = (packet[2]>=128);
     /* nq */
     new_dns_message->nq = (packet[4]<<8)|(packet[5]);
@@ -134,20 +135,40 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 
 void print_message(dns_message_t *dns_message) {
     printf("---header---\n");
-    printf("ID: %x\n",dns_message->header.id);
-    printf("QR: %d\n",dns_message->header.QR);
-    printf("NQ: %d\n",dns_message->nq);
-    printf("NA: %d\n",dns_message->nr);
+    printf("ID: %x",dns_message->header.id);
+    printf(" ,QR: %d",dns_message->header.QR);
+    printf(" ,NQ: %d",dns_message->nq);
+    printf(" ,NA: %d\n",dns_message->nr);
 
     printf("---question---\n");
-    printf("URL: %s\n",dns_message->question.q);
-    printf("AAAA: %d\n",dns_message->question.is_AAAA);
+    printf("URL: %s",dns_message->question.q);
+    printf(" ,AAAA: %d\n",dns_message->question.is_AAAA);
 
     if (dns_message->nr>0) {
         printf("---response---\n");
-        printf("AAAA: %d\n",dns_message->response.is_AAAA);
         printf("IPv6: %s\n",dns_message->response.r);
     }
+}
+
+void print_log(dns_message_t *dns_message) {
+    time_t rawtime;
+    struct tm *timeptr;
+    char str[50+1]= "";
+    time(&rawtime);
+    timeptr = localtime( &rawtime );
+
+    strftime(str, 50, "%FT%T%z", timeptr);
+
+    printf("%s ",str);
+    if (dns_message->question.is_AAAA == false) {
+        printf("unimplemented request\n");
+    } else if (dns_message->nr == 0) {
+        printf("requested %s\n",dns_message->question.q);
+    } else if (dns_message->nr>0) {
+        printf("%s is at %s\n",dns_message->question.q,dns_message->response.r);
+    }
+    //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache
+    //<timestamp> replacing <domain_name> by <domain_name> – for each cache eviction
 
 }
 

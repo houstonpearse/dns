@@ -45,4 +45,6 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 
 void print_message(dns_message_t *dns_message);
 
+void print_log(dns_message_t *dns_message);
+
 #endif

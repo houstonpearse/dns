@@ -33,7 +33,9 @@ int main(int argc, char* argv[]) {
     packet = malloc(packet_size*sizeof(*packet));
     read(STDIN_FILENO,packet,packet_size);
 
-    print_message(new_dns_message(packet,packet_size));
+    dns_message_t *message = new_dns_message(packet,packet_size);
+    print_message(message);
+    print_log(message);
 
     /* print packet */
     hex_dump(packet,packet_size);

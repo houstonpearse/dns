@@ -214,7 +214,7 @@ char *get_log_message(dns_message_t *dns_message) {
     
     /* dont write to the log if its a reply with no answer */
     if(dns_message->header.QR==1 && 
-        (dns_message->nr == 0 || dns_message->response.is_AAAA) ) {
+        (dns_message->nr == 0 || dns_message->response.is_AAAA==0) ) {
         return NULL;
 
     } else if (dns_message->header.QR==1 && dns_message->nr!=0) {

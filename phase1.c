@@ -55,34 +55,3 @@ int main(int argc, char* argv[]) {
 
 /************************************************************************/
 
-/** helper functions **/
-
-void print_hex(uint8_t n) {
-    printf("%02X ",n);
-}
-
-
-/* helper function to format result to inspect easily */
-void hex_dump(uint8_t *packet,int packet_size) {
-    int i,j;
-    printf("-------------------------------------------------\n");
-    printf("00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F |\n");
-    printf("----------------------------------------------- |\n");
-    
-    i=0;
-    for (j=0;j<packet_size;j++) {
-        if(i==16) {
-            i=0;
-            printf("|\n");
-        }
-        print_hex(packet[j]);
-        i++;
-    }
-    while (i!=16) {
-        i++;
-        printf("   ");
-    }
-    printf("|\n");
-    printf("-------------------------------------------------\n");
-}
-

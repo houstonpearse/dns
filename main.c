@@ -29,7 +29,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out);
 int main(int argc,char** argv) {
     int sockfd_out,sockfd_inc,newsockfd_inc;
 	struct sockaddr_storage client_addr;
-	socklen_t client_addr_size = sizeof client_addr;
+	socklen_t client_addr_size;
 
 
     /* the ip and port of the server the messages will be forwarded to */
@@ -46,16 +46,21 @@ int main(int argc,char** argv) {
 
     
     while(true) {
-        
+        printf("---------------------------------\n");
+        printf("waiting for new connections...\n");
         /* accept a connection request on our listening socket */
+        client_addr_size = sizeof client_addr;
         newsockfd_inc = 
         accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
+        
         
         /* check if we succeeded */
         if (newsockfd_inc < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
+        
+        printf("accepted a new connection %d\n",newsockfd_inc);
 
         handle_new_connection(newsockfd_inc,sockfd_out);
         
@@ -108,7 +113,7 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
     /* forward server response to client */
     write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
     
-
+    printf("closing connection\n");
     close(newsockfd_inc);
 
 }
@@ -117,16 +122,19 @@ void handle_new_connection(int newsockfd_inc,int sockfd_out) {
 uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
     uint8_t *buffer;
     int current_len,bytes_to_read,bytes_read;
+    uint16_t btr;
 
     printf("allocating memory header...\n");
     // allocate memory for two byte tcp size header
     buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
+
     // read two byte size header
     printf("reading size header...\n");
     read(sockfd,buffer,TCP_SIZE_HEADER);
     current_len = TCP_SIZE_HEADER;
+
     // get number of bytes of the remaining message
-    bytes_to_read = ((buffer[0]<<BYTE_TO_BIT)|buffer[1]);
+    bytes_to_read = btr = ntohs(*(uint16_t*)buffer);
     printf("size is %d, reallocate...\n",bytes_to_read);
     buffer = realloc(buffer,bytes_to_read+TCP_SIZE_HEADER);
 
@@ -138,6 +146,8 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
         current_len+=bytes_read;
         if (bytes_to_read == 0) {
             *sizeptr = current_len;
+            hex_dump(buffer,current_len);
+            printf("total bytes read is %d\n",current_len);
             return buffer;
         }
     }
@@ -148,10 +158,11 @@ uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
 */
 void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
     //int bytes_sent=0,bytes_rem = buffer_size,bytes_written;
+    int n;
+    n = write(sockfd,buffer,buffer_size);
     
-    if(write(sockfd,buffer,buffer_size)<buffer_size) {
-        printf("only partially wrote to socket...\n");
-    }
+    
+    printf("wrote %d bytes. bufferlen is %d\n",n,buffer_size);
     /*
     while(true) {
         bytes_written=write(sockfd,&buffer[bytes_sent],bytes_rem);

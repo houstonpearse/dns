@@ -37,6 +37,8 @@ dns_message_t *new_dns_message(uint8_t *packet,int packet_size);
 /* allocate memory for new dns_message */
 dns_message_t *make_new_dns_message();
 
+void set_parameters(uint8_t *packet,int packet_size);
+
 /* gets relevent infomation about dns header */
 void get_header(dns_message_t *new_dns_message,uint8_t *packet,int packet_size);
 
@@ -51,6 +53,8 @@ void write_to_log(dns_message_t *dns_message,int isreply);
 
 void print_binary(uint8_t n);
 
-void set_parameters(uint8_t *packet,int packet_size);
+void hex_dump(uint8_t *packet,int packet_size);
+
+
 
 #endif

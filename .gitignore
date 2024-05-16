@@ -12,3 +12,4 @@ dns_message
 settings.json
 .vscode
 *.log
+*.dSYM

@@ -184,18 +184,32 @@ void write_to_log(dns_message_t *dns_message,int isreply) {
     
 
 
-    if (dns_message->question.is_AAAA == false) {
-        strcpy(temp," unimplemented request\n");
-        strcat(log,temp);
-    } else if (dns_message->nr == 0) {
+    // write request or response to log
+    if (dns_message->header.QR == 0) {
+        // is a query
         sprintf(temp," requested %s\n",dns_message->question.domn);
         strcat(log,temp);
-    } else if (dns_message->nr>0) {
+    } else {
+        // is a response
         sprintf(temp," %s is at %s\n",dns_message->question.domn,dns_message->response.ipadr);
         strcat(log,temp);
     }
     printf("%s",log);
     fprintf(fp,"%s",log);
+
+    // if message was not an AAAA then add extra line to log
+    if (dns_message->question.is_AAAA == false) {
+        //reset log string
+        log[0]=0;
+        // add timestamp to log
+        strcpy(log,timetemp);
+        // add message to log
+        strcpy(temp," unimplemented request\n");
+        strcat(log,temp);
+        printf("%s",log);
+        fprintf(fp,"%s",log);
+    }
+    
     fflush(fp);
     fclose(fp);
     //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache

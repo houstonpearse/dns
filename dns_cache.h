@@ -1,5 +1,5 @@
-#ifndef DNS_CACHE
-#define DNS_CACHE
+#ifndef DNS_CACHING
+#define DNS_CACHING
 
 #include <stdint.h>
 #include <time.h>

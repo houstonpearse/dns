@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define MAX_TIMESTAMP_LEN 128
+#define MAX_LOGLINE_LENGTH 700
+
 cache_item_t *new_cache_item(char *domname,uint32_t ttl,uint8_t *packet,int packet_size) {
     cache_item_t *ci;
     ci = malloc(sizeof(*ci));
@@ -77,7 +80,7 @@ char *usage_cache_message(cache_item_t *cache_item) {
     // – for each request you receive that is in your cache
     time_t rawtime;
     struct tm *timeptr;
-    char timetemp[128] = "", log[512] = ""; 
+    char timetemp[MAX_TIMESTAMP_LEN] = "", log[MAX_LOGLINE_LENGTH] = ""; 
     
     /* setup time stamp */
     time(&rawtime);
@@ -95,7 +98,7 @@ char *usage_cache_message(cache_item_t *cache_item) {
 }
 char *evict_cache_message(cache_item_t *old,cache_item_t *new) {
     assert(old!=NULL && new!=NULL);
-    char timetemp[128] = "", log[512] = ""; 
+    char timetemp[MAX_TIMESTAMP_LEN] = "", log[MAX_LOGLINE_LENGTH] = ""; 
     time_t rawtime;
     struct tm *timeptr;
     

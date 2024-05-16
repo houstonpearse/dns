@@ -8,8 +8,6 @@
 #include <stdbool.h>
 #include <netdb.h>
 
-#define LOGFILEPATH "dns_svr.log"
-
 
 typedef struct header {
     uint16_t id;

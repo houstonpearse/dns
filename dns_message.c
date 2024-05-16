@@ -208,13 +208,13 @@ char *get_log_message(dns_message_t *dns_message) {
 
     } else if (dns_message->header.QR==1 && dns_message->nr!=0) {
         // is a response
-        sprintf(temp," %s is at %s\n",
+        sprintf(temp," %s is at %s",
             dns_message->question.domn,dns_message->response.ipadr);
         strcat(log,temp);
 
     } else if (dns_message->header.QR==0) {
         // is a query
-        sprintf(temp," requested %s\n",dns_message->question.domn);
+        sprintf(temp," requested %s",dns_message->question.domn);
         strcat(log,temp);
     } 
 
@@ -223,10 +223,14 @@ char *get_log_message(dns_message_t *dns_message) {
 
     // if message was not an AAAA then add extra line to log
     if (dns_message->question.is_AAAA == false) {
+        // add new line character
+        int len = strlen(log);
+        log[len] = '\n';
+        log[len+1] = '\0';
         // add timestamp to log
         strcat(log,timetemp);
         // add message to log
-        strcpy(temp," unimplemented request\n");
+        strcpy(temp," unimplemented request");
         strcat(log,temp);
     }
 

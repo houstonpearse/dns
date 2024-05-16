@@ -4,7 +4,6 @@
 
 #include "dns_message.h"
 
-#define _POSIX_C_SOURCE 200112L
 #include <ctype.h>
 #include <netdb.h>
 #include <stdio.h>

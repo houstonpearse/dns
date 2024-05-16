@@ -221,5 +221,6 @@ void print_binary(uint8_t n) {
     for(; i1; i1 >>= 1) {
       printf("%d  ",(n&i1)!=0);
     }
+    printf("\n");
 }
 

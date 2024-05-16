@@ -66,12 +66,12 @@ int get_question(dns_message_t *new_dns_message,uint8_t *packet,int packet_size)
             /* cast from 8 bit int to char */
             temp = (char)packet[i];
             /* insert */
-            new_dns_message->question.q[url_pos]=temp;
+            new_dns_message->question.domn[url_pos]=temp;
             /* move to next spot in string */
             url_pos++;
         }
         /* append a '.' after each section */
-        new_dns_message->question.q[url_pos] = '.';
+        new_dns_message->question.domn[url_pos] = '.';
         url_pos++;
         /* get length of next section */
         sec_len = packet[stop];
@@ -82,7 +82,7 @@ int get_question(dns_message_t *new_dns_message,uint8_t *packet,int packet_size)
     }
 
     /* swap last '.' for a null byte */
-    new_dns_message->question.q[url_pos-1] = '\0';
+    new_dns_message->question.domn[url_pos-1] = '\0';
 
     /* read question type AAAA or A */
     new_dns_message->question.is_AAAA=(((packet[start]<<8)|(packet[start+1]))==28);
@@ -99,7 +99,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     uint8_t ip[16];
 
     /* init string with null byte */
-    new_dns_message->response.r[0] = '\0';
+    new_dns_message->response.ipadr[0] = '\0';
 
     assert(packet_size>start + 12);
     /* skip Aname */
@@ -121,7 +121,7 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 
     
     assert(packet_size>=start+rlen);
-    assert(rlen = 16);
+    assert(rlen == 16);
     
     /* read byte string */
     for (i=0;i<16;i+=1) {
@@ -129,46 +129,57 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
     }
 
     /* convert byte string into ip address */
-    inet_ntop(AF_INET6,ip,new_dns_message->response.r,INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6,ip,new_dns_message->response.ipadr,INET6_ADDRSTRLEN);
     
 }
 
 void print_message(dns_message_t *dns_message) {
-    printf("\n---header---\n");
+    printf("\n------------- header -------------\n");
     printf("ID: %x",dns_message->header.id);
     printf(" ,QR: %d",dns_message->header.QR);
     printf(" ,NQ: %d",dns_message->nq);
     printf(" ,NA: %d\n",dns_message->nr);
 
-    printf("---question---\n");
-    printf("URL: %s",dns_message->question.q);
+    printf("------------- question ---------------\n");
+    printf("URL: %s",dns_message->question.domn);
     printf(" ,AAAA: %d\n",dns_message->question.is_AAAA);
 
     if (dns_message->nr>0) {
-        printf("---response---\n");
-        printf("IPv6: %s\n",dns_message->response.r);
+        printf("----------------response-------------\n");
+        printf("IPv6: %s\n",dns_message->response.ipadr);
     }
     printf("\n");
 }
 
-void print_log(dns_message_t *dns_message) {
+
+void write_to_log(dns_message_t *dns_message) {
+    FILE *fp = fopen(LOGFILEPATH,"a");
     time_t rawtime;
     struct tm *timeptr;
-    char str[50+1]= "";
+    char timetemp[100+1] = "",log[500] = "", temp[500]  = ""; 
+    
+    timeptr = localtime(&rawtime);
     time(&rawtime);
-    timeptr = localtime( &rawtime );
+    strftime(timetemp, 100, "%FT%T%z", timeptr);
 
-    strftime(str, 50, "%FT%T%z", timeptr);
+    strcat(log,timetemp);
+    
 
-    printf("%s ",str);
+
     if (dns_message->question.is_AAAA == false) {
-        printf("unimplemented request\n");
+        strcpy(temp," unimplemented request\n");
+        strcat(log,temp);
     } else if (dns_message->nr == 0) {
-        printf("requested %s\n",dns_message->question.q);
+        sprintf(temp," requested %s\n",dns_message->question.domn);
+        strcat(log,temp);
     } else if (dns_message->nr>0) {
-        printf("%s is at %s\n",dns_message->question.q,dns_message->response.r);
+        sprintf(temp," %s is at %s\n",dns_message->question.domn,dns_message->response.ipadr);
+        strcat(log,temp);
     }
+    printf("%s",log);
+    fprintf(fp,"%s",log);
+    fclose(fp);
     //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache
     //<timestamp> replacing <domain_name> by <domain_name> – for each cache eviction
-    printf("\n");
+
 }

@@ -128,9 +128,8 @@ int main(int argc,char** argv) {
         printf("whole message not read from client\n");
     }
 
-    //message = new_dns_message(&cbuffer[2],len);
-    //print_message(message);
-    //print_log(message);
+    message = new_dns_message(&cbuffer[2],len);
+    write_to_log(message);
 
     /*************** forward message to server ***************/
 

@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 
     dns_message_t *message = new_dns_message(packet,packet_size);
     print_message(message);
-    print_log(message);
+    write_to_log(message);
 
     /* print packet */
     hex_dump(packet,packet_size);

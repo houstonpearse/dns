@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <netdb.h>
 
+#define LOGFILEPATH "dns_svr.log"
+
 
 typedef struct header {
     uint16_t id;
@@ -13,12 +15,12 @@ typedef struct header {
 }header_t;
 
 typedef struct question {
-    char q[240];
+    char domn[240];
     bool is_AAAA;
 }question_t;
 
 typedef struct response {
-    char r[INET6_ADDRSTRLEN];
+    char ipadr[INET6_ADDRSTRLEN];
     bool is_AAAA;
 }response_t;
 
@@ -45,6 +47,6 @@ void get_response(int start,dns_message_t *new_dns_message,uint8_t *packet, int 
 
 void print_message(dns_message_t *dns_message);
 
-void print_log(dns_message_t *dns_message);
+void write_to_log(dns_message_t *dns_message);
 
 #endif

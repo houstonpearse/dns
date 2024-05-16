@@ -166,24 +166,22 @@ void print_message(dns_message_t *dns_message) {
 
 
 void write_to_log(dns_message_t *dns_message,int isreply) {
-    /* dont write to the log if its a reply with no answer */
-    if(isreply && dns_message->nr == 0) {
-        return;
-    }
-
     FILE *fp = fopen(LOGFILEPATH,"a");
     time_t rawtime;
     struct tm *timeptr;
     char timetemp[100+1] = "",log[500] = "", temp[500]  = ""; 
     
+    /* dont write to the log if its a reply with no answer */
+    if(isreply && dns_message->nr == 0) {
+        return;
+    }
+
+    /* setup time stamp */
     time(&rawtime);
     timeptr = localtime(&rawtime);
     strftime(timetemp, 100, "%FT%T%z", timeptr);
-
     strcat(log,timetemp);
     
-
-
     // write request or response to log
     if (dns_message->header.QR == 0) {
         // is a query
@@ -209,7 +207,7 @@ void write_to_log(dns_message_t *dns_message,int isreply) {
         printf("%s",log);
         fprintf(fp,"%s",log);
     }
-    
+
     fflush(fp);
     fclose(fp);
     //<timestamp> <domain_name> expires at <timestamp> – for each request you receive that is in your cache

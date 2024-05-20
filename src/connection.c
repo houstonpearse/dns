@@ -54,7 +54,7 @@ int write_buffer(int sockfd, uint8_t *buffer,int buffer_size) {
     @param char *port - The port to listen on
     @param int queue_size - The maximum number of connections in the queue
 */
-int setup_listening_socket(int port, int queue_size) {
+int listening_socket(int port, int queue_size) {
     struct addrinfo hints,*res;
     int re,s,sockfd;
     char port_string[10];
@@ -103,7 +103,7 @@ int setup_listening_socket(int port, int queue_size) {
 }
 
 
-int setup_forwarding_socket(char ip[],char port[]) {
+int tcp_connection(char ip[],char port[]) {
     struct addrinfo hints,*res,*rp;
     int s,sockfd;
 

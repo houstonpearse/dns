@@ -10,5 +10,5 @@
 
 uint8_t *read_tcp(int sockfd,int *sizeptr);
 int write_buffer(int sockfd, uint8_t *buffer,int buffer_size);
-int setup_listening_socket(int port, int queue_size);
-int setup_forwarding_socket(char ip[],char port[]);
+int listening_socket(int port, int queue_size);
+int tcp_connection(char ip[],char port[]);

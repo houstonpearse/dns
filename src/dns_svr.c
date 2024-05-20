@@ -9,21 +9,13 @@
 #include <pthread.h>
 
 #define LOG_FILE_PATH "dns_svr.log"
-#define LOCAL_PORT_NUM "8053"
-#define LISTEN_QUEUE_NUM 20
-#define TCP_SIZE_HEADER 2
-#define BYTE_TO_BIT 8
-#define NOT_REPLY 0
-#define REPLY 1
-#define CACHE
-#define NONBLOCKING
 
 void *handle_new_connection(void *args);
 void write_log_message(char *message);
 struct arguments {
     cache_t *cache;
-    int newsockfd_inc;
-    int sockfd_out;
+    int client_con_fd;
+    int upstream_con_fd;
 };
 
 pthread_mutex_t cachelock;
@@ -31,7 +23,7 @@ pthread_mutex_t connectionlock;
 pthread_mutex_t filelock;
 
 int main(int argc,char** argv) {
-    int sockfd_out,sockfd_inc,newsockfd_inc;
+    int upstream_con_fd,listen_socket_fd,client_con_fd;
 	struct sockaddr_storage client_addr;
 	socklen_t client_addr_size;
     cache_t *cache;
@@ -42,43 +34,30 @@ int main(int argc,char** argv) {
 		fprintf(stderr, "usage %s serverIP port\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
-    FILE *fp = fopen(LOG_FILE_PATH,"a");
-    fclose(fp);
-
-    /* sets up socket to receive incomming connections and listens */
-    sockfd_inc = setup_listening_socket(8053,20);
 
     /* setup cache */
     cache = malloc(sizeof(*cache));
     cache->lastupdate = time(NULL);
 
-    args= malloc(sizeof(*args));
-    args->cache = cache;
-    printf("-------------------------------IPV6-DNS-------------------------------\n");
-    printf("setup upstream connection...\n");
-    sockfd_out = setup_forwarding_socket(argv[1], argv[2]);
-    printf("upstream connection initiated\n");
+    printf("-----------------------IPV6-DNS-----------------------\n");
+    upstream_con_fd = tcp_connection(argv[1], argv[2]);
+    listen_socket_fd = listening_socket(8053,20);
+    printf("listening for connections on port %d\n",8053);
     while(true) {
-        printf("waiting for new connections...\n");
-        /* accept a connection request on our listening socket */
-        client_addr_size = sizeof client_addr;
-        newsockfd_inc = accept(sockfd_inc, (struct sockaddr*)&client_addr, &client_addr_size);
-        
-        /* check if we succeeded */
-        if (newsockfd_inc < 0) {
+        client_con_fd = accept(listen_socket_fd, NULL, NULL);
+        if (client_con_fd < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
-        
-        printf("accepted a new connection. socketfd = %d\n",newsockfd_inc);
+        printf("accepted a new connection. socketfd = %d\n",client_con_fd);
         args = malloc(sizeof(*args));
         args->cache = cache;
-        args->newsockfd_inc = newsockfd_inc;
-        args->sockfd_out = sockfd_out;
+        args->client_con_fd = client_con_fd;
+        args->upstream_con_fd = upstream_con_fd;
         pthread_t t;
         pthread_create(&t,NULL,handle_new_connection,args);
     }
-    close(sockfd_inc);
+    close(listen_socket_fd);
 }
 
 /**************** helpers *****************/
@@ -87,8 +66,8 @@ int main(int argc,char** argv) {
 void *handle_new_connection(void *args) {
     // unpack args from struct and free struct
     cache_t *cache = ((struct arguments*)args)->cache;
-    int newsockfd_inc = ((struct arguments*)args)->newsockfd_inc;
-    int sockfd_out = ((struct arguments*)args)->sockfd_out;
+    int client_con_fd = ((struct arguments*)args)->client_con_fd;
+    int upstream_con_fd = ((struct arguments*)args)->upstream_con_fd;
     free(args);
 
     int i,inc_mes_len,out_mes_len;
@@ -97,33 +76,33 @@ void *handle_new_connection(void *args) {
     cache_item_t *cache_search_val,*new_cache_val,*evicted;
     char *logstring,*cachestring;
 
-    printf("(%d) reading from client...\n",newsockfd_inc);
-    cbuffer = read_tcp(newsockfd_inc,&inc_mes_len);
+    printf("(%d) reading from client...\n",client_con_fd);
+    cbuffer = read_tcp(client_con_fd,&inc_mes_len);
     hex_dump(cbuffer,inc_mes_len);
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
     if (inc_message == NULL) {
-        printf("(%d) Invalid DNS Query\n",newsockfd_inc);
+        printf("(%d) Invalid DNS Query\n",client_con_fd);
         pthread_mutex_unlock(&cachelock);
-        close(newsockfd_inc);
+        close(client_con_fd);
         return NULL;
     } 
 
-    printf("(%d) received client request\n",newsockfd_inc);
+    printf("(%d) received client request\n",client_con_fd);
     logstring = get_log_message(inc_message);
     write_log_message(logstring);
     
     if(inc_message->question.is_AAAA == false) {
-        printf("(%d) IPV4 Request Not Implemented.\n",newsockfd_inc);
+        printf("(%d) IPV4 Request Not Implemented.\n",client_con_fd);
         set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,4,1);
-        write_buffer(newsockfd_inc,cbuffer,inc_mes_len);
-        close(newsockfd_inc);
+        write_buffer(client_con_fd,cbuffer,inc_mes_len);
+        close(client_con_fd);
         return NULL;
     } 
 
     pthread_mutex_lock(&cachelock);
     cache_search_val = find_cache_item(cache,inc_message->question.domn);
     if (cache_search_val != NULL && cache_search_val->ttl>0) {
-        printf("(%d) Cache hit for %s\n",newsockfd_inc,inc_message->question.domn);
+        printf("(%d) Cache hit for %s\n",client_con_fd,inc_message->question.domn);
         
         // copy buffer from cache
         upsbuffer = malloc(cache_search_val->buffer_size*sizeof(*upsbuffer));
@@ -142,37 +121,37 @@ void *handle_new_connection(void *args) {
         write_log_message(get_log_message(new_dns_message(&upsbuffer[2],out_mes_len-2)));
         
         // send back response
-        write_buffer(newsockfd_inc,upsbuffer,out_mes_len);
-        close(newsockfd_inc);
+        write_buffer(client_con_fd,upsbuffer,out_mes_len);
+        close(client_con_fd);
         pthread_mutex_unlock(&cachelock);
         return NULL;
     }
     pthread_mutex_unlock(&cachelock);
     
     /* forward AAAA query to upstream server */
-    printf("(%d) forwarding to upstream server...\n",newsockfd_inc);
+    printf("(%d) forwarding to upstream server...\n",client_con_fd);
     pthread_mutex_lock(&connectionlock);
-    write_buffer(sockfd_out,cbuffer,inc_mes_len);
-    printf("(%d) reading response from upstream server...\n",newsockfd_inc);
-    upsbuffer = read_tcp(sockfd_out,&out_mes_len);
+    write_buffer(upstream_con_fd,cbuffer,inc_mes_len);
+    printf("(%d) reading response from upstream server...\n",client_con_fd);
+    upsbuffer = read_tcp(upstream_con_fd,&out_mes_len);
     hex_dump(upsbuffer,out_mes_len);
     pthread_mutex_unlock(&connectionlock);
     if (upsbuffer == NULL) {
-        printf("(%d) failed to read from upstream server",newsockfd_inc);
+        printf("(%d) failed to read from upstream server",client_con_fd);
         set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,2,-1);
-        write_buffer(newsockfd_inc,cbuffer,inc_mes_len);
-        close(newsockfd_inc);
+        write_buffer(client_con_fd,cbuffer,inc_mes_len);
+        close(client_con_fd);
         return NULL;
     }
     
     /* read upstream response */
     out_message = new_dns_message(&upsbuffer[2],out_mes_len-2);
     if (out_message == NULL) {
-        printf("(%d) Received an unknown response from upstream server\n",newsockfd_inc);
+        printf("(%d) Received an unknown response from upstream server\n",client_con_fd);
         set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,2,-1);
         upsbuffer=cbuffer;
         out_mes_len=inc_mes_len;
-        close(newsockfd_inc);
+        close(client_con_fd);
         return NULL;
     }
 
@@ -196,9 +175,9 @@ void *handle_new_connection(void *args) {
     write_log_message(logstring);
 
     /* forward message to client */
-    write_buffer(newsockfd_inc,upsbuffer,out_mes_len);
-    printf("(%d) sent response to client\n",newsockfd_inc);
-    close(newsockfd_inc);
+    write_buffer(client_con_fd,upsbuffer,out_mes_len);
+    printf("(%d) sent response to client\n",client_con_fd);
+    close(client_con_fd);
     return NULL;
 
 }

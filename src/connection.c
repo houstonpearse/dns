@@ -44,7 +44,6 @@ int write_buffer(int sockfd, uint8_t *buffer,int buffer_size) {
             perror("write buffer");
             return -1;
         }
-        printf("bytes writte %d\n",bytes_written);
         bytes_sent+=bytes_written;
     }
     return bytes_sent;
@@ -102,35 +101,33 @@ int listening_socket(int port, int queue_size) {
     return sockfd;
 }
 
-
-int tcp_connection(char ip[],char port[]) {
+int connection(char ip[],int port,int socket_type) {
     struct addrinfo hints,*res,*rp;
     int s,sockfd;
+    char port_string[10];
 
     /* create address we will send to */
+    sprintf(port_string,"%d",port);
     memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	s = getaddrinfo(ip, port, &hints, &res);
+	hints.ai_socktype = socket_type;
+	s = getaddrinfo(ip, port_string, &hints, &res);
 
     /* check if we suceeded */
 	if (s != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-		exit(EXIT_FAILURE);
+		return -1;
 	}
     
     /* attempt to connect to the first valid result */
     for (rp = res; rp != NULL; rp = rp->ai_next) {
 		sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-		if (sockfd == -1)
-			continue;
-
-		if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) != -1)
-			break; // success
-
-		close(sockfd);
+		if (sockfd != -1) {
+            if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) != -1) {
+                return sockfd;
+            }
+            close(sockfd);
+        }
 	}
-
-    return sockfd;
-
+    return -1;
 }

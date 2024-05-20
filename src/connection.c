@@ -7,14 +7,20 @@ uint8_t *read_tcp(int sockfd,int *sizeptr) {
 
     // read 2 byte size header 
     buffer = malloc(TCP_SIZE_HEADER_LENGTH*sizeof(uint8_t));
-    *sizeptr = read(sockfd,buffer,TCP_SIZE_HEADER_LENGTH);
-    if (*sizeptr < 0) {
-        perror("read tcp");
-        free(buffer);
-        return NULL;
+    *sizeptr=0;
+    while (*sizeptr<TCP_SIZE_HEADER_LENGTH) {
+        bytes_read=read(sockfd,&buffer[*sizeptr],TCP_SIZE_HEADER_LENGTH-*sizeptr);
+        if (bytes_read < 0) {
+            perror("read tcp");
+            free(buffer);
+            return NULL;
+        }
+        *sizeptr+=bytes_read;
     }
-    packet_size = ntohs(*(uint16_t*)buffer);
-    buffer = realloc(buffer,(packet_size+TCP_SIZE_HEADER_LENGTH)*sizeof(uint8_t));
+
+    // read number of remaining bytes
+    packet_size = ntohs(*(uint16_t*)buffer) + *sizeptr;
+    buffer = realloc(buffer,packet_size*sizeof(uint8_t));
 
     // read rest of message
     while (*sizeptr<packet_size) {

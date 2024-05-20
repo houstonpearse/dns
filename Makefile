@@ -4,7 +4,7 @@
 # COPT - compiler flags
 # BIN - binary
 CC=gcc
-OBJ=dns_message.o dns_cache.o
+OBJ=dns_message.o dns_cache.o connection.o
 COPT=-Wall -Wpedantic
 BIN=dns_svr
 
@@ -23,6 +23,10 @@ $(BIN): src/dns_svr.c $(OBJ)
 %.o: src/%.c src/%.h
 	$(CC) -c $< $(COPT) -g
 
+.PHONY: start
+start:
+	make $(BIN)
+	./$(BIN) 1.1.1.1 53
 format:
 	clang-format -i *.c *.h
 

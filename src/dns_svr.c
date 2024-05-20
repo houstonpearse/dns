@@ -1,8 +1,8 @@
+#include "connection.h"
 #include "dns_message.h"
 #include "dns_cache.h"
 #include <ctype.h>
 #include <netdb.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -18,10 +18,6 @@
 #define CACHE
 #define NONBLOCKING
 
-uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr);
-void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size);
-int setup_forwarding_socket(char ip[],char port[]);
-int setup_listening_socket(void);
 void *handle_new_connection(void *args);
 void write_log_message(char *message);
 struct arguments {
@@ -50,7 +46,7 @@ int main(int argc,char** argv) {
     fclose(fp);
 
     /* sets up socket to receive incomming connections and listens */
-    sockfd_inc = setup_listening_socket();
+    sockfd_inc = setup_listening_socket(8053,20);
 
     /* setup cache */
     cache = malloc(sizeof(*cache));
@@ -81,13 +77,8 @@ int main(int argc,char** argv) {
         args->sockfd_out = sockfd_out;
         pthread_t t;
         pthread_create(&t,NULL,handle_new_connection,args);
-        
     }
-
     close(sockfd_inc);
-    
-    
-    
 }
 
 /**************** helpers *****************/
@@ -107,7 +98,8 @@ void *handle_new_connection(void *args) {
     char *logstring,*cachestring;
 
     printf("(%d) reading from client...\n",newsockfd_inc);
-    cbuffer = read_tcp_from_socket(newsockfd_inc,&inc_mes_len);
+    cbuffer = read_tcp(newsockfd_inc,&inc_mes_len);
+    hex_dump(cbuffer,inc_mes_len);
     inc_message = new_dns_message(&cbuffer[2],inc_mes_len-2);
     if (inc_message == NULL) {
         printf("(%d) Invalid DNS Query\n",newsockfd_inc);
@@ -123,7 +115,7 @@ void *handle_new_connection(void *args) {
     if(inc_message->question.is_AAAA == false) {
         printf("(%d) IPV4 Request Not Implemented.\n",newsockfd_inc);
         set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,4,1);
-        write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+        write_buffer(newsockfd_inc,cbuffer,inc_mes_len);
         close(newsockfd_inc);
         return NULL;
     } 
@@ -150,7 +142,7 @@ void *handle_new_connection(void *args) {
         write_log_message(get_log_message(new_dns_message(&upsbuffer[2],out_mes_len-2)));
         
         // send back response
-        write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
+        write_buffer(newsockfd_inc,upsbuffer,out_mes_len);
         close(newsockfd_inc);
         pthread_mutex_unlock(&cachelock);
         return NULL;
@@ -160,14 +152,15 @@ void *handle_new_connection(void *args) {
     /* forward AAAA query to upstream server */
     printf("(%d) forwarding to upstream server...\n",newsockfd_inc);
     pthread_mutex_lock(&connectionlock);
-    write_tcp_to_socket(sockfd_out,cbuffer,inc_mes_len);
+    write_buffer(sockfd_out,cbuffer,inc_mes_len);
     printf("(%d) reading response from upstream server...\n",newsockfd_inc);
-    upsbuffer = read_tcp_from_socket(sockfd_out,&out_mes_len);
+    upsbuffer = read_tcp(sockfd_out,&out_mes_len);
+    hex_dump(upsbuffer,out_mes_len);
     pthread_mutex_unlock(&connectionlock);
     if (upsbuffer == NULL) {
         printf("(%d) failed to read from upstream server",newsockfd_inc);
         set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,2,-1);
-        write_tcp_to_socket(newsockfd_inc,cbuffer,inc_mes_len);
+        write_buffer(newsockfd_inc,cbuffer,inc_mes_len);
         close(newsockfd_inc);
         return NULL;
     }
@@ -203,153 +196,12 @@ void *handle_new_connection(void *args) {
     write_log_message(logstring);
 
     /* forward message to client */
-    write_tcp_to_socket(newsockfd_inc,upsbuffer,out_mes_len);
+    write_buffer(newsockfd_inc,upsbuffer,out_mes_len);
     printf("(%d) sent response to client\n",newsockfd_inc);
     close(newsockfd_inc);
     return NULL;
 
 }
-
-/* reads a response packet from a socket, stores size in pointer */
-uint8_t *read_tcp_from_socket(int sockfd,int *sizeptr) {
-    uint8_t *buffer;
-    int current_len=0,bytes_to_read=0,bytes_read=0;
-
-    // allocate memory for two byte tcp size header
-    buffer = malloc(TCP_SIZE_HEADER*sizeof(uint8_t));
-
-    // read two byte size header
-    current_len += read(sockfd,buffer,TCP_SIZE_HEADER);
-
-    // get number of bytes of the remaining message
-    //bytes_to_read = buffer[0]<<8 | buffer[1];
-    bytes_to_read = ntohs(*(uint16_t*)buffer);
-    //bytes_to_read = *(uint16_t*)buffer;
-    //*(uint16_t*)buffer = htons(*(uint16_t*)buffer);
-    buffer = realloc(buffer,(bytes_to_read+TCP_SIZE_HEADER)*sizeof(uint8_t));
-
-
-    // read rest of message
-    while (true) {
-        bytes_read=read(sockfd,&buffer[current_len],bytes_to_read);
-        if (bytes_read < 0) {
-            return NULL;
-        }
-        bytes_to_read-=bytes_read;
-        current_len+=bytes_read;
-        if (bytes_to_read == 0) {
-            break;
-        }
-    }
-
-    *sizeptr = current_len;
-    hex_dump(buffer,current_len);
-    return buffer;
-}
-
-/* writes a buffer to a socket. will keep trying to send untill entire buffer
- *is received
-*/
-void write_tcp_to_socket(int sockfd, uint8_t *buffer,int buffer_size) {
-    int bytes_written,bytes_sent,bytes_rem;
-    
-    bytes_rem = buffer_size;
-    bytes_sent = 0;
-    while(true) {
-        bytes_written=write(sockfd,&buffer[bytes_sent],bytes_rem);
-        if (bytes_written < 0) {
-            fprintf(stderr,"Failed to write to socket (%d)\n",sockfd);
-            return;
-        }
-        bytes_rem-=bytes_written;
-        bytes_sent+=bytes_written;
-        if(bytes_rem==0) {
-            return;
-        }
-    }
-}
-
-/* sets up listening socket */
-int setup_listening_socket(void) {
-    struct addrinfo hints,*res;
-    int re,s,sockfd;
-
-    /* Create address we're going to listen on with port number 8053 */
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
-	s = getaddrinfo(NULL, LOCAL_PORT_NUM, &hints, &res);
-
-    /* check if we succeeded */
-	if (s != 0) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-		exit(EXIT_FAILURE);
-	}
-
-    /* create socket we will listen on */
-    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (sockfd < 0) {
-        perror("socket_inc");
-        exit(EXIT_FAILURE);
-    }
-
-    /* so we can reuse port */
-    re = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &re, sizeof(int)) < 0) {
-        perror("setsockopt_inc");
-        exit(EXIT_FAILURE);
-    }
-
-    /* bind to socket */
-    if (bind(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
-        perror("bind");
-        exit(EXIT_FAILURE);
-    }
-
-    /* listen on socket */
-    if (listen(sockfd, LISTEN_QUEUE_NUM) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
-
-    return sockfd;
-}
-
-
-int setup_forwarding_socket(char ip[],char port[]) {
-    struct addrinfo hints,*res,*rp;
-    int s,sockfd;
-
-    /* create address we will send to */
-    memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	s = getaddrinfo(ip, port, &hints, &res);
-
-    /* check if we suceeded */
-	if (s != 0) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-		exit(EXIT_FAILURE);
-	}
-    
-    
-    /* attempt to connect to the first valid result */
-    for (rp = res; rp != NULL; rp = rp->ai_next) {
-		sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-		if (sockfd == -1)
-			continue;
-
-		if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) != -1)
-			break; // success
-
-		close(sockfd);
-	}
-
-    return sockfd;
-
-}
-
 
 void write_log_message(char *message) {
     if (message==NULL) return;

@@ -42,9 +42,12 @@ int write_buffer(int sockfd, uint8_t *buffer,int buffer_size) {
         bytes_written=write(sockfd,&buffer[bytes_sent],buffer_size-bytes_sent);
         if (bytes_written < 0) {
             perror("write buffer");
-            return -1;
+            if (errno != EAGAIN && errno != EINTR) {
+                return -1;
+            } 
+        } else {
+            bytes_sent+=bytes_written;
         }
-        bytes_sent+=bytes_written;
     }
     return bytes_sent;
 }

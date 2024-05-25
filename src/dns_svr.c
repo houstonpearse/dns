@@ -42,6 +42,9 @@ int main(int argc,char** argv) {
     printf("-----------------------IPV6-DNS-----------------------\n");
     upstream_connnection.socket = connection(argv[1], atoi(argv[2]),SOCK_STREAM);
     upstream_connnection.socket_type = SOCK_STREAM;
+    upstream_connnection.port = atoi(argv[2]);
+    strcpy(upstream_connnection.ip,argv[1]); 
+
     listen_socket_fd = listening_socket(8053,20);
     printf("listening for connections on port %d\n",8053);
     while(true) {
@@ -138,6 +141,7 @@ void *handle_new_connection(void *args) {
         upsbuffer = read_tcp(upstream_connection->socket,&out_mes_len); 
         if (upsbuffer == NULL || bytes_written<inc_mes_len) {
             printf("(%d) Failed to communicate to upstream server. Retrying.\n",client_con_fd);
+            close(upstream_connection->socket);
             upstream_connection->socket = connection(upstream_connection->ip,upstream_connection->port,upstream_connection->socket_type);
         } else {
             break;

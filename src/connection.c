@@ -55,7 +55,7 @@ int write_buffer(int sockfd, uint8_t *buffer,int buffer_size) {
 */
 int listening_socket(int port, int queue_size) {
     struct addrinfo hints,*res;
-    int re,s,sockfd;
+    int opt=1,s,sockfd;
     char port_string[10];
 
     /* Create address we're going to listen on with port number 8053 */
@@ -73,15 +73,13 @@ int listening_socket(int port, int queue_size) {
 	}
 
     /* create socket we will listen on */
-    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (sockfd < 0) {
+    if ((sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
         perror("socket_inc");
         exit(EXIT_FAILURE);
     }
 
     /* so we can reuse port */
-    re = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &re, sizeof(int)) < 0) {
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt_inc");
         exit(EXIT_FAILURE);
     }

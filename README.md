@@ -1,6 +1,8 @@
-# IPV6 TCP DNS Server
+# DNS Server
+A multithreaded dns server with connection retrying.
 
 ## usage
 
-`make`
-`./dns_svr ip port`
+run `start.sh` script with the IP adress and port number of the upstream DNS server.
+
+`sh start.sh IP PORT`

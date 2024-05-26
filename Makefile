@@ -15,7 +15,7 @@ BIN=dns_svr
 # (Note that spaces will not work.)
 
 $(BIN): src/dns_svr.c $(OBJ)
-	$(CC) -lpthread -o $(BIN) src/dns_svr.c $(OBJ) $(COPT)
+	$(CC) -pthread -o $(BIN) src/dns_svr.c $(OBJ) $(COPT)
 
 
 # Wildcard rule to make any  .o  file,
@@ -23,13 +23,9 @@ $(BIN): src/dns_svr.c $(OBJ)
 %.o: src/%.c src/%.h
 	$(CC) -c $< $(COPT) -g
 
-.PHONY: start
-start:
-	make $(BIN)
-	./$(BIN) 1.1.1.1 53
 format:
 	clang-format -i *.c *.h
 
 clean:
-	rm -f *.o dns_svr 
+	rm -f *.o $(BIN) 
 	rm -f dns_svr.log

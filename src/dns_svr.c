@@ -19,9 +19,9 @@ struct arguments {
     connection_t *upstream_connection;
 };
 
-pthread_mutex_t cachelock;
-pthread_mutex_t connectionlock;
-pthread_mutex_t filelock;
+pthread_mutex_t cachelock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t connectionlock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t filelock = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc,char** argv) {
     int listen_socket_fd,client_con_fd;

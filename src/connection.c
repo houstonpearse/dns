@@ -1,21 +1,22 @@
+#include <poll.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <netdb.h>
+#include <errno.h>
+#include <ctype.h>
 #include "connection.h"
 
 /* reads a response packet from a socket, stores size in pointer */
 uint8_t *read_tcp(int sockfd,int *sizeptr) {
     uint8_t *buffer;
-    int packet_size,bytes_read;
+    int packet_size;
 
     // read 2 byte size header 
     buffer = malloc(TCP_SIZE_HEADER_LENGTH*sizeof(uint8_t));
-    *sizeptr=0;
-    while (*sizeptr<TCP_SIZE_HEADER_LENGTH) {
-        bytes_read=read(sockfd,&buffer[*sizeptr],TCP_SIZE_HEADER_LENGTH-*sizeptr);
-        if (bytes_read < 0) {
-            perror("read tcp");
-            free(buffer);
-            return NULL;
-        }
-        *sizeptr+=bytes_read;
+    if ((*sizeptr = read_buffer(sockfd,buffer,0,TCP_SIZE_HEADER_LENGTH))==-1) {
+        free(buffer);
+        return NULL;
     }
 
     // read number of remaining bytes
@@ -23,16 +24,47 @@ uint8_t *read_tcp(int sockfd,int *sizeptr) {
     buffer = realloc(buffer,packet_size*sizeof(uint8_t));
 
     // read rest of message
-    while (*sizeptr<packet_size) {
-        bytes_read=read(sockfd,&buffer[*sizeptr],packet_size-*sizeptr);
-        if (bytes_read < 0) {
-            perror("read tcp");
-            free(buffer);
-            return NULL;
-        }
-        *sizeptr+=bytes_read;
+    if ((*sizeptr = read_buffer(sockfd,buffer,*sizeptr,packet_size))==-1) {
+        free(buffer);
+        return NULL;
     }
     return buffer;
+}
+
+
+int read_buffer(int sockfd, uint8_t *buffer,int buffer_pos, int buffer_size) {
+    int bytes_read,read_pos=buffer_pos;
+    while (read_pos<buffer_size) {
+        bytes_read=read(sockfd,&buffer[read_pos],buffer_size-read_pos);
+        if (bytes_read < 0) {
+            perror("read buffer");
+            int err = errno;
+            if ((err == EAGAIN) || (err == EWOULDBLOCK)){
+                // retry after polling period
+                struct pollfd pfds = {0};
+                pfds.events = POLL_IN;
+                pfds.fd = sockfd;
+                if (poll(&pfds,1,-1)==-1) {
+                    perror("poll");
+                    exit(1);
+                } else if (pfds.revents & POLL_IN) {
+                    // can now retry
+                    continue;
+                } else {
+                    return -1;
+                };
+            } else if (errno == EINTR) {
+                // safe to retry
+                continue;
+            } else {
+                // fatal error
+                return -1;
+            }
+        } else {
+            read_pos+=bytes_read;
+        }
+    }
+    return read_pos;
 }
 
 /* Writes a entire buffer and retries if entire buffer it not written */
@@ -42,9 +74,28 @@ int write_buffer(int sockfd, uint8_t *buffer,int buffer_size) {
         bytes_written=write(sockfd,&buffer[bytes_sent],buffer_size-bytes_sent);
         if (bytes_written < 0) {
             perror("write buffer");
-            if (errno != EAGAIN && errno != EINTR) {
+            int err = errno;
+            if ((err == EAGAIN) || (err == EWOULDBLOCK)){
+                // retry after polling period
+                struct pollfd pfds = {0};
+                pfds.events = POLL_OUT;
+                pfds.fd = sockfd;
+                if (poll(&pfds,1,-1)==-1) {
+                    perror("poll");
+                    exit(1);
+                } else if (pfds.revents & POLL_OUT) {
+                    // can now retry
+                    continue;
+                } else {
+                    return -1;
+                };
+            } else if (errno == EINTR) {
+                // safe to retry
+                continue;
+            } else {
+                // fatal error
                 return -1;
-            } 
+            }
         } else {
             bytes_sent+=bytes_written;
         }

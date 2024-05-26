@@ -153,17 +153,17 @@ int listening_socket(int port, int queue_size) {
     return sockfd;
 }
 
-int connection(char ip[],int port,int socket_type) {
+int connection(struct connection *conn) {
     struct addrinfo hints,*res,*rp;
     int s,sockfd;
     char port_string[10];
-
+    
     /* create address we will send to */
-    sprintf(port_string,"%d",port);
+    sprintf(port_string,"%d",conn->port);
     memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET;
-	hints.ai_socktype = socket_type;
-	s = getaddrinfo(ip, port_string, &hints, &res);
+	hints.ai_socktype = conn->socket_type;
+	s = getaddrinfo(conn->ip, port_string, &hints, &res);
 
     /* check if we suceeded */
 	if (s != 0) {
@@ -176,10 +176,69 @@ int connection(char ip[],int port,int socket_type) {
 		sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 		if (sockfd != -1) {
             if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) != -1) {
+                printf("connected to %s:%d on socket %d with type %d\n",conn->ip,conn->port,sockfd,conn->socket_type);
+                conn->socket = sockfd;
                 return sockfd;
             }
+            perror("connect");
             close(sockfd);
         }
 	}
     return -1;
+}
+
+int reconnect(struct connection *conn) {
+    close(conn->socket);
+    return connection(conn);
+}
+
+uint8_t *send_request(struct connection *conn, uint8_t *buffer, int buffer_len, int *response_len, int retry) {
+    uint8_t *response = NULL;
+    int bytes_written=0,attempts=0,retries=0;
+    if (conn->socket_type==SOCK_STREAM) { // tcp
+        do {
+            attempts=0;
+            do {
+                printf("(%d) Sending request\n",conn->socket);
+                bytes_written = write_buffer(conn->socket,buffer,buffer_len);
+                if (bytes_written==buffer_len) break;
+                if (attempts>=retry) {
+                    printf("(%d) Failed to send request\n",conn->socket);
+                    return NULL;
+                }
+                printf("(%d) Failed to send request. Closing connection and Retrying.\n",conn->socket);
+                if (reconnect(conn)<0) {
+                    printf("(%d) Failed to reconnect\n",conn->socket); 
+                    return NULL;
+                }
+                attempts++;
+            } while(attempts<retry);
+            
+            printf("(%d) Reading response\n",conn->socket);
+            response = read_tcp(conn->socket,response_len); 
+            if (response != NULL){
+                break;
+            };
+            if (retries+1>=retry) {
+                printf("(%d) Failed to read a response.\n",conn->socket);
+            } else {
+                printf("(%d) Failed to read response. Closing connection and Retrying.\n",conn->socket);
+            }
+            if (reconnect(conn)<0) {
+                printf("(%d) Failed to reconnect\n",conn->socket); 
+                return NULL;
+            }
+
+            retries++;
+        } while (retries<retry);
+
+        return response;
+    } else if (conn->socket_type==SOCK_DGRAM) {
+        // udp connection
+        return NULL;
+    } else {
+        fprintf(stderr,"Invalid connection type (%d) expected 1 for TCP and 2 for UDP\n",conn->socket_type);
+        return NULL;
+    }
+
 }

@@ -1,6 +1,7 @@
 #include "connection.h"
 #include "dns_message.h"
 #include "dns_cache.h"
+#include <stdio.h>
 #include <ctype.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -9,7 +10,9 @@
 #include <pthread.h>
 
 #define LOG_FILE_PATH "dns_svr.log"
-#define MAX_RETRIES 2
+#define CONNECTION_RETRY 3
+#define PORT 8053
+#define CONNECTION_QUEUE_SIZE 20
 
 void *handle_new_connection(void *args);
 void write_log_message(char *message);
@@ -27,37 +30,39 @@ int main(int argc,char** argv) {
     int listen_socket_fd,client_con_fd;
     cache_t *cache;
     struct arguments *args;
-    connection_t upstream_connnection;
-
+    connection_t upstream_connection = {0};
+    
     /* the ip and port of the server the messages will be forwarded to */
     if (argc < 3) {
 		fprintf(stderr, "usage %s serverIP port\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
+    /* connection parameters */
+    signal(SIGPIPE, SIG_IGN); // ignore sigpipe errors
+    upstream_connection.socket_type = SOCK_STREAM;
+    upstream_connection.port = atoi(argv[2]);
+    strcpy(upstream_connection.ip,argv[1]); 
+
     /* setup cache */
     cache = malloc(sizeof(*cache));
     cache->lastupdate = time(NULL);
 
     printf("-----------------------IPV6-DNS-----------------------\n");
-    upstream_connnection.socket = connection(argv[1], atoi(argv[2]),SOCK_STREAM);
-    upstream_connnection.socket_type = SOCK_STREAM;
-    upstream_connnection.port = atoi(argv[2]);
-    strcpy(upstream_connnection.ip,argv[1]); 
-
-    listen_socket_fd = listening_socket(8053,20);
-    printf("listening for connections on port %d\n",8053);
+    listen_socket_fd = listening_socket(PORT,CONNECTION_QUEUE_SIZE);
+    connection(&upstream_connection);
+    printf("(main) listening for connections on port %d\n",PORT);
     while(true) {
         client_con_fd = accept(listen_socket_fd, NULL, NULL);
         if (client_con_fd < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
-        printf("accepted a new connection. socketfd = %d\n",client_con_fd);
+        printf("(main) accepted a new connection. socketfd = %d\n",client_con_fd);
         args = malloc(sizeof(*args));
         args->cache = cache;
         args->client_con_fd = client_con_fd;
-        args->upstream_connection = &upstream_connnection;
+        args->upstream_connection = &upstream_connection;
         pthread_t t;
         pthread_create(&t,NULL,handle_new_connection,args);
     }
@@ -74,7 +79,7 @@ void *handle_new_connection(void *args) {
     connection_t *upstream_connection = ((struct arguments*)args)->upstream_connection;
     free(args);
 
-    int i,inc_mes_len,out_mes_len,bytes_written;
+    int i,inc_mes_len,out_mes_len;
     uint8_t *cbuffer,*upsbuffer;
     dns_message_t *out_message,*inc_message;
     cache_item_t *cache_search_val,*new_cache_val,*evicted;
@@ -89,8 +94,6 @@ void *handle_new_connection(void *args) {
         close(client_con_fd);
         return NULL;
     } 
-
-    printf("(%d) Received client request\n",client_con_fd);
     logstring = get_log_message(inc_message);
     write_log_message(logstring);
     
@@ -132,26 +135,15 @@ void *handle_new_connection(void *args) {
     pthread_mutex_unlock(&cachelock);
     
     /* forward AAAA query to upstream server */
-    printf("(%d) Forwarding message to upstream server\n",client_con_fd);
     pthread_mutex_lock(&connectionlock);
-    int attempts=0;
-    while (attempts<MAX_RETRIES) {
-        attempts++;
-        bytes_written = write_buffer(upstream_connection->socket,cbuffer,inc_mes_len);
-        upsbuffer = read_tcp(upstream_connection->socket,&out_mes_len); 
-        if (upsbuffer == NULL || bytes_written<inc_mes_len) {
-            printf("(%d) Failed to communicate to upstream server. Retrying.\n",client_con_fd);
-            close(upstream_connection->socket);
-            upstream_connection->socket = connection(upstream_connection->ip,upstream_connection->port,upstream_connection->socket_type);
-        } else {
-            break;
-        }
-    }
+    printf("(%d) connection lock\n",client_con_fd);
+    upsbuffer = send_request(upstream_connection,cbuffer,inc_mes_len,&out_mes_len,CONNECTION_RETRY);
+    printf("(%d) connection unlock\n",client_con_fd);
     pthread_mutex_unlock(&connectionlock);
 
     /* check for success */
-    if (upsbuffer == NULL || bytes_written < inc_mes_len) {
-        printf("(%d) Failed to communicate with upstream server\n",client_con_fd);
+    if (upsbuffer == NULL) {
+        printf("(%d) Failed to communicate with upstream server. Setting SERVERROR flag\n",client_con_fd);
         set_packet_headers(&cbuffer[2],inc_mes_len-2,-1,1,2,-1);
         write_buffer(client_con_fd,cbuffer,inc_mes_len); 
         close(client_con_fd);

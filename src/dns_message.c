@@ -1,4 +1,3 @@
-
 #include "dns_message.h"
 
 #include <stdint.h>
@@ -12,8 +11,6 @@
 
 #define MAX_TIME_LEN 128
 #define MAX_LOG_LEN 1024
-
-
 
 /* creates new dns message from a dns packet */
 dns_message_t *new_dns_message(uint8_t *packet,int packet_size) {

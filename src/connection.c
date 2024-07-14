@@ -5,7 +5,9 @@
 #include <netdb.h>
 #include <errno.h>
 #include <ctype.h>
+#include <syslog.h>
 #include "connection.h"
+#include "logger.h"
 
 /* reads a response packet from a socket, stores size in pointer */
 uint8_t *read_tcp(int sockfd,int *sizeptr) {
@@ -176,7 +178,7 @@ int connection(struct connection *conn) {
 		sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 		if (sockfd != -1) {
             if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) != -1) {
-                printf("connected to %s:%d on socket %d with type %d\n",conn->ip,conn->port,sockfd,conn->socket_type);
+                logger(LOG_INFO,"connected to %s:%d on socket %d with socket_type %d\n",conn->ip,conn->port,sockfd,conn->socket_type);
                 conn->socket = sockfd;
                 return sockfd;
             }
@@ -194,39 +196,39 @@ int reconnect(struct connection *conn) {
 
 uint8_t *send_request(struct connection *conn, uint8_t *buffer, int buffer_len, int *response_len, int retry) {
     uint8_t *response = NULL;
-    int bytes_written=0,attempts=0,retries=0;
+    int bytes_written=0,send_retries=0,retries=0;
     if (conn->socket_type==SOCK_STREAM) { // tcp
         do {
-            attempts=0;
+            send_retries=0;
             do {
-                printf("(%d) Sending request\n",conn->socket);
+                logger(LOG_INFO,"Sending request to socket %d\n",conn->socket);
                 bytes_written = write_buffer(conn->socket,buffer,buffer_len);
                 if (bytes_written==buffer_len) break;
-                if (attempts>=retry) {
-                    printf("(%d) Failed to send request\n",conn->socket);
+                if (send_retries>=retry) {
+                    logger(LOG_ERR,"Failed to send request to socket %d\n",conn->socket);
                     return NULL;
                 }
-                printf("(%d) Failed to send request. Closing connection and Retrying.\n",conn->socket);
+                logger(LOG_WARNING,"Failed to send request. Closing connection(%d) and Retrying.\n",conn->socket);
                 if (reconnect(conn)<0) {
-                    printf("(%d) Failed to reconnect\n",conn->socket); 
+                    logger(LOG_ERR,"Failed to reconnect\n"); 
                     return NULL;
                 }
-                attempts++;
-            } while(attempts<retry);
+                send_retries++;
+            } while(send_retries<retry);
             
-            printf("(%d) Reading response\n",conn->socket);
+            logger(LOG_INFO,"Reading response from socket %d\n",conn->socket);
             response = read_tcp(conn->socket,response_len); 
             if (response != NULL){
                 break;
-            };
-            if (retries+1>=retry) {
-                printf("(%d) Failed to read a response.\n",conn->socket);
-            } else {
-                printf("(%d) Failed to read response. Closing connection and Retrying.\n",conn->socket);
-            }
-            if (reconnect(conn)<0) {
-                printf("(%d) Failed to reconnect\n",conn->socket); 
+            } else if (retries+1>=retry) {
+                logger(LOG_ERR,"Failed to read a response from socket %d. Abandoning request\n",conn->socket);
                 return NULL;
+            } else {
+                logger(LOG_WARNING,"Failed to read a response from socket %d. Reconnecting\n",conn->socket);
+                if (reconnect(conn)<0) {
+                    logger(LOG_ERR,"Failed to reconnect\n"); 
+                    return NULL;
+                }
             }
 
             retries++;
